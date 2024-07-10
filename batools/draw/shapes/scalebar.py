@@ -24,7 +24,7 @@ class ScaleBar(Rectangle2D):
         # print('bar_width_in_units',bar_width_in_units, 'unit_to_pixel_conversion_factor',unit_to_pixel_conversion_factor)
 
         self.bar_height_in_px = bar_height_in_px
-        self.bar.setWidth(bar_width_in_units * (unit_to_pixel_conversion_factor if unit_to_pixel_conversion_factor else 1))
+        self.bar.setWidth(bar_width_in_units / (unit_to_pixel_conversion_factor if unit_to_pixel_conversion_factor else 1))
         self.bar.setHeight(self.bar_height_in_px)
         self.legend = None
         self.setLegend(legend)
@@ -49,7 +49,7 @@ class ScaleBar(Rectangle2D):
 
     def setBarWidth(self, bar_width_in_units):
         self.bar_width_in_units = bar_width_in_units
-        self.bar.setWidth(bar_width_in_units * (self.unit_to_pixel_conversion_factor if self.unit_to_pixel_conversion_factor else 1)) # this is ok but this is unscaled!!!
+        self.bar.setWidth(bar_width_in_units / (self.unit_to_pixel_conversion_factor if self.unit_to_pixel_conversion_factor else 1)) # this is ok but this is unscaled!!!
         self.updateBoudingRect()
 
     def update_bar_at_scale(self,scale):
@@ -62,7 +62,7 @@ class ScaleBar(Rectangle2D):
 
         self.scale = scale
 
-        self.bar.setWidth((self.bar_width_in_units * (self.unit_to_pixel_conversion_factor if self.unit_to_pixel_conversion_factor else 1.)) / self.scale)
+        self.bar.setWidth((self.bar_width_in_units / (self.unit_to_pixel_conversion_factor if self.unit_to_pixel_conversion_factor else 1.)) / self.scale)
 
         # self.packY() # it is the packing that fucks it all
         # print('after2a', self.bar.width(),self.width())  # --> bar width is computed correctly so why isn't the size ok !!!
@@ -216,7 +216,7 @@ class ScaleBar(Rectangle2D):
         #     last_x = img.boundingRect().x() + img.boundingRect().width()
         #     last_y = img.boundingRect().y() + img.boundingRect().height()
         if self.legend is not None and not isinstance(self.legend, str):
-            self.bar.setWidth((self.bar_width_in_units * self.unit_to_pixel_conversion_factor)/self.scale)
+            self.bar.setWidth((self.bar_width_in_units / self.unit_to_pixel_conversion_factor)/self.scale)
             # alignCenterH(self.legend, self.bar)
             align2(align_positions[-1], self.legend, self.bar)
             # align_positions = ['Top', 'Bottom', 'Left', 'Right', 'CenterV', 'CenterH']
