@@ -49,13 +49,15 @@ normalization_ranges = [[0, 1], [-1, 1]]
 def start_JVM():
     # NB BELOW IS MANDATORY TO HAVE SUPPORT FOR BIOFORMATS --> start_JVM SHOULD BE CALLED ONLY ONCE PER INSTANCE AND stop_JVM SHOULD BE CALLED ON LEAVE!
     try:
+        # raise Exception('test error') # force error
         # Start the JVM when the application launches
         import javabridge
         import bioformats
 
         javabridge.start_vm(class_path=bioformats.JARS, run_headless=True, max_heap_size='1G')
     except:
-        pass
+        traceback.print_exc()
+        logger.error('Could not instantiate javabridge bioformats will not work')
 
 def stop_JVM():
     try:
@@ -71,7 +73,8 @@ def guess_dimensions(img):
 
     if hasattr(img, 'metadata'):
         if 'dimensions' in img.metadata:
-            return img.metadata['dimensions']
+            if isinstance(img.metadata['dimensions'],str):
+                return img.metadata['dimensions']
 
     if len(img.shape) == 2:
         return 'hw'
@@ -5094,6 +5097,13 @@ class ImageReader:
 
 
 if __name__ == '__main__':
+    if True:
+        from batoolset.tools.logger import TA_logger
+
+
+        print('bob')
+        sys.exit(0)
+
 
     if True:
         # tst = Img('/media/teamPrudhomme/EqpPrudhomme2/Vani/RNAi/Transvection_WT/Het/RNAi_het_20240312/26296_het_F1.tif')
