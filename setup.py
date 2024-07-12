@@ -1,11 +1,11 @@
 import setuptools
-from batools.version import __VERSION__,__EMAIL__,__AUTHOR__,__DESCRIPTION__, __URL__
+from batoolset.version import __VERSION__,__EMAIL__,__AUTHOR__,__DESCRIPTION__, __URL__
 
 with open('README.md', 'r') as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name='batools', # shall I do it like that or not --> try on testpy first
+    name='batoolset', # shall I do it like that or not --> try on testpy first
     version=__VERSION__,
     author=__AUTHOR__,
     author_email=__EMAIL__,
