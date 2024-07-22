@@ -47,7 +47,7 @@ def add_epyseg_to_sys_path(file=None, print_only=False):
     else:
         epyseg_path = file
 
-    batoolset_path = __file__.split('epyseg_pkg')[0] + 'batoolset_pkg/'
+    batoolset_path = __file__.split('epyseg_pkg')[0] + 'BAtools_pkg/'
     pyfigures_path = __file__.split('epyseg_pkg')[0] + 'pyfigures_pkg/'
     epyseg_path = __file__.split('epyseg_pkg')[0] + 'epyseg_pkg/'
     dev_path = __file__.split('epyseg_pkg')[0] + 'dev/'

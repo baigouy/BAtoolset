@@ -311,6 +311,17 @@ class Image2D(Rectangle2D):
             self.px_to_unit_conversion_factor = 0
             # print()
 
+
+    def get_extra_dimensions(self, handle_proj=False):
+        if not isinstance(self.img, np.ndarray):
+            return None
+        guessed_dimensions = guess_dimensions(self.img)
+        extra_dims = guessed_dimensions.replace('h', '').replace('w', '').replace('c', '')
+        if extra_dims and handle_proj:
+            if self.projection is not None:
+                extra_dims = extra_dims[:-1]
+        return extra_dims
+
     def clip_by_frequency(self, lower_cutoff=None, upper_cutoff=0.05, channel_mode=True):
         '''
         Clips the values of an image based on frequency cutoffs.
@@ -463,7 +474,7 @@ class Image2D(Rectangle2D):
         if len(target_dims) > len(image_to_display.shape):
             target_dims = target_dims[len(target_dims)-len(image_to_display.shape):]
 
-        # print('final redndering',image_to_display.shape)
+        # print('final rendering',image_to_display.shape)
         # print('checking img', image_to_display.shape, 'vs', self.img.shape)
         # if self.channels is not None and not self.channels == 'merge' and 'c' in target_dims:
         #         if self.channels>=0 and self.channels < self.img.shape[-1]:
@@ -481,7 +492,6 @@ class Image2D(Rectangle2D):
             if not 'c' in target_dims:
                 image_to_display = image_to_display[..., np.newaxis]
                 target_dims+='c'
-
 
         if self.channels and 'c' in target_dims:
             # print('inside channels sel self.channels', self.channels)
@@ -646,6 +656,7 @@ class Image2D(Rectangle2D):
         # print('~' * 30)
 
         del image_to_display
+        # del self.img # that would be great but then I would need tricks to know its parameters
 
         # print('----------'*32)
         # return qimage

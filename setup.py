@@ -52,6 +52,7 @@ setuptools.setup(
         "python-javabridge",
         "pyautogui",
         "imagecodecs",
+        "zarr",
     ],
     python_requires='>=3.7, <3.11' # from 04/05/23 colab is using python 3.10.11
 )

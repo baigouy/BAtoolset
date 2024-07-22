@@ -1,6 +1,7 @@
 from batoolset.tools.logger import TA_logger  # logging
 logger = TA_logger()  # logging_level=TA_logger.DEBUG
 from batoolset.files.tools import smart_name_parser
+from batoolset.images.centralstore import ImageCentralStore
 import random
 import os
 import read_lif  # read Leica .lif files (requires numexpr)
@@ -2827,6 +2828,8 @@ def toQimage(img, autofix_always_display2D=True, normalize=True, z_behaviour=Non
         qimage = QImage(img.data.tobytes(), img.shape[1], img.shape[0], bytesPerLine,
                         QImage.Format_Indexed8)
 
+    del img
+
     return qimage
 
 
@@ -3561,7 +3564,7 @@ class Img(np.ndarray):  # subclass ndarray
     # TODO allow load list of images all specified as strings one by one
     # TODO allow virtual stack --> open only one image at a time from a series, can probably do that with text files
     def __new__(cls, *args, t=0, d=0, z=0, h=0, y=0, w=0, x=0, c=0, bits=8, serie_to_open=None, dimensions=None,
-                metadata=None, **kwargs) -> object:
+                metadata=None, prefer_store_if_available=True, **kwargs) -> object:
         '''Creates a new instance of the Img class
         
         The image class is a numpy ndarray. It is nothing but a matrix of pixel values.
@@ -3631,8 +3634,22 @@ class Img(np.ndarray):  # subclass ndarray
                     # single image
                     creation_time = get_file_creation_time(args[0])
                     try:
+                        # if prefer_store_if_available: # see how I can handle that smartly... -−> not so easy
+
                         try:
-                            meta, img = ImageReader.read(args[0], serie_to_open=serie_to_open)
+                            img = None
+
+                            # print('entering here1')
+
+                            if prefer_store_if_available:
+                                # prefer reload the image from store if available --> will speed up the loading process and spare more resources
+                                # print('entering here2')
+                                meta, img = ImageCentralStore.load(args[0])  # may work
+
+
+                            if img is None:
+                                # print('entering here3')
+                                meta, img = ImageReader.read(args[0], serie_to_open=serie_to_open)
                         except:
                             meta, img = read_file_with_bioformats(args[0])
                     except:
@@ -3672,6 +3689,9 @@ class Img(np.ndarray):  # subclass ndarray
                     img.metadata = meta_data
                     # img.metadata.update({'creation_time': creation_time})
                 else:
+
+                    # TODO --> I need also implement addition of a list to the store -> TODO
+
                     # series of images
                     if isinstance(args[0], list):
                         # the user directly provided a list --> just stack the images -−> can be useful --> there will be error if they don't have same size --> offer options for that but in a later step
