@@ -48,11 +48,16 @@ setuptools.setup(
         "QtPy>=2.1.0",
         "Deprecated",
         "Requests",
-        "python-bioformats",
-        "python-javabridge",
+        # "python-bioformats",
+        # "python-javabridge",
         "pyautogui",
         "imagecodecs",
-        "zarr",
+        # "zarr",
     ],
+    extras_require={'all': [
+        "python-javabridge",
+        "python-bioformats",
+    ],
+    },
     python_requires='>=3.7, <3.11' # from 04/05/23 colab is using python 3.10.11
 )
