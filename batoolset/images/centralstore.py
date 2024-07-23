@@ -1,7 +1,5 @@
 import os.path
-import traceback
 import gc
-import zarr
 
 # from batoolset.img import Img
 # pb the store should also store metadata  -−> see how I can do that
