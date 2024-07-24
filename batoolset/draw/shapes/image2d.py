@@ -311,6 +311,15 @@ class Image2D(Rectangle2D):
             self.px_to_unit_conversion_factor = 0
             # print()
 
+    def get_nb_channels(self):
+        if isinstance(self.img, np.ndarray):
+            guessed_dimensions =guess_dimensions(self.img)
+            if 'c' in guessed_dimensions:
+                return self.img.shape[guessed_dimensions.index('c')]
+            else:
+                return 1
+        else:
+            return 0
 
     def get_extra_dimensions(self, handle_proj=False):
         if not isinstance(self.img, np.ndarray):

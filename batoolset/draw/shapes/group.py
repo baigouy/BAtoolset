@@ -317,10 +317,6 @@ class Group(Rectangle2D):
         self.isText = isText # this is just for pure text groups (will have a different behaviour on double click)
         # self.scale = 1
 
-    @classmethod
-    def reset_count(cls):
-        cls._count = 0
-
   # List-like behavior
     def __getitem__(self, key):
         # print(key)
@@ -364,7 +360,7 @@ class Group(Rectangle2D):
             if not self.isEmpty():
                 try:
                     # print('resizing', self, self.content)
-                    set_to_size(self,self.width() if self.orientation == 'X' else self.height())
+                    set_to_size(self, self.width() if self.orientation == 'X' else self.height())
                 except:
                     # print('just for info for now, comment that lines in the future')
                     traceback.print_exc()
@@ -882,6 +878,14 @@ class Group(Rectangle2D):
 
     def __setitem__(self, index, item):
         self.content[index] = item
+
+    def get_nested_groups(self):
+        groups = [self]
+        if self.content:
+            for group in self.content:
+                if isinstance(group, Group):
+                    groups.extend(group.get_nested_groups())
+        return groups
 
     def contains(self, *__args):
         # hacked contains that checks whether a point or an image is contained in the stuff
