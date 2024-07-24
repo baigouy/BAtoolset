@@ -2,10 +2,9 @@
 # NB this will ultimately become the one and only paint widget in the app --> all others or most of them should disappear and be replaced by that
 # TODO need add the save but only for the mask edit item!!!
 import os
-
-from batoolset.pyqt.tools import getCtrlModifier
 from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
+from batoolset.pyqt.tools import getCtrlModifier
 import traceback
 from qtpy.QtGui import QKeySequence
 from skimage.measure import label, regionprops

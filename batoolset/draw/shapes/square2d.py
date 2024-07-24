@@ -1,8 +1,7 @@
 import os
-
-from batoolset.draw.shapes.rectangle2d import Rectangle2D
 from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
+from batoolset.draw.shapes.rectangle2d import Rectangle2D
 from qtpy.QtCore import QPointF
 
 from batoolset.draw.shapes.rect2d import Rect2D

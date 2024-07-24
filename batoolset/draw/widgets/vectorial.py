@@ -3,11 +3,10 @@
 
 
 import os
-
-from batoolset.draw.shapes.txt2d import TAText2D
-from batoolset.pyqt.tools import getCtrlModifier
 from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
+from batoolset.draw.shapes.txt2d import TAText2D
+from batoolset.pyqt.tools import getCtrlModifier
 from qtpy import QtCore
 from batoolset.draw.shapes.polygon2d import Polygon2D
 from batoolset.draw.shapes.line2d import Line2D
