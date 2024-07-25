@@ -3,6 +3,7 @@ A collection of file related methods
 
 
 """
+
 from batoolset.lists.tools import find_first_index, flatten_list
 from batoolset.strings.tools import is_string_a_list_string, reload_string_list
 from datetime import datetime
@@ -15,11 +16,7 @@ from batoolset.utils.loadlist import loadlist
 import os
 import shutil
 import uuid
-
-
-
 import numpy as np
-from skimage.draw import polygon, polygon_perimeter
 from skimage.measure import regionprops
 from skimage import measure
 from collections import Counter
@@ -539,6 +536,7 @@ def plot_triangles(img, coords, tri, inner_color, perimeter_color=None):
         perimeter_color (int, optional): Perimeter color of the triangles. Defaults to None.
 
     """
+    from skimage.draw import polygon, polygon_perimeter
     for simplex in tri.simplices:
         r = coords[simplex][:, 0]  # get the y coords of the simplex
         c = coords[simplex][:, 1]  # get the x coords of the simplex
@@ -1078,8 +1076,19 @@ def smartly_consolidate_files_to_reduce_dupes(full_list_of_filenames_to_consolid
             print(idx, elm.filename,'not found')
     return full_list_of_filenames_to_consolidate,final_version_of_consolidated_files
 
+def get_home_dir(extra=None):
+    home_directory = os.path.expanduser('~')
+    if extra:
+        home_directory = os.path.join(home_directory,extra)
+    return home_directory
+
 if __name__ == '__main__':
     import sys
+
+    if True:
+        print(get_home_dir('.jdk'))
+        print(get_home_dir('.jre'))
+        sys.exit(0)
 
     if True:
         # Usage

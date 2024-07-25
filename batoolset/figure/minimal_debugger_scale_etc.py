@@ -8,7 +8,7 @@
 # can one use words for that
 
 
-from batoolset.draw.shapes.image2d import Image2D
+from batoolset.drawings.shapes.image2d import Image2D
 from batoolset.figure.alignment import packX
 from batoolset.figure.column import Column
 # from batoolset.figure.fig_tools import preview, get_common_scaling_factor

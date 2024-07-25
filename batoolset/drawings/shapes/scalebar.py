@@ -3,9 +3,9 @@ set_UI()
 from qtpy.QtGui import QTransform,QPen, QColor
 from qtpy.QtCore import QPointF
 from batoolset.figure.alignment import pack2, align2, align_positions
-from batoolset.draw.shapes.rectangle2d import Rectangle2D
-from batoolset.draw.shapes.txt2d import TAText2D
-from batoolset.draw.shapes.Position import Position
+from batoolset.drawings.shapes.rectangle2d import Rectangle2D
+from batoolset.drawings.shapes.txt2d import TAText2D
+from batoolset.drawings.shapes.Position import Position
 # logger
 from batoolset.tools.logger import TA_logger
 

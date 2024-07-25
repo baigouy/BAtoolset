@@ -1,6 +1,6 @@
-from batoolset.draw.shapes.Position import Position
-from batoolset.draw.shapes.txt2d import TAText2D
-from batoolset.pyqt.tools import get_html_text_with_font
+from batoolset.drawings.shapes.Position import Position
+from batoolset.drawings.shapes.txt2d import TAText2D
+from batoolset.pyqts.tools import get_html_text_with_font
 from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
 from qtpy.QtGui import QFont

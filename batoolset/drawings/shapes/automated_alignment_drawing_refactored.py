@@ -6,8 +6,8 @@ from qtpy.QtGui import QTransform,QPolygon
 from qtpy.QtWidgets import QApplication, QWidget
 from qtpy.QtGui import QPainter, QPen, QBrush, QColor
 from qtpy.QtCore import Qt, QPointF, QRectF,QPoint
-from batoolset.draw.shapes.polyline2d import PolyLine2D
-from batoolset.draw.shapes.transform2D import get_centroid, get_points, Transform2D
+from batoolset.drawings.shapes.polyline2d import PolyLine2D
+from batoolset.drawings.shapes.transform2D import get_centroid, get_points, Transform2D
 
 def compute_translation_corrections(img1, minimal_return=True):
     old_scale = img1.scale

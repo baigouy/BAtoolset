@@ -31,7 +31,7 @@
 import os
 from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
-from batoolset.draw.shapes.rect2d import Rect2D
+from batoolset.drawings.shapes.rect2d import Rect2D
 from qtpy.QtCore import QPointF, QRectF
 
 # from batoolset.figure.fig_tools import preview
@@ -337,10 +337,10 @@ class Panel(Rect2D):
                 #     logger.debug('not enough images so adding empty images with same size as last entry')
                 #     row += Image2D(width=last_size.width(), height=last_size.height())
             if row is not None and not len(row) == 0:
-                from batoolset.draw.widgets.image_organizer import packX
+                from batoolset.drawings.widgets.image_organizer import packX
                 # packing seems correct then need align top
                 packX(row, self.space) # ça ça marche
-                from batoolset.draw.widgets.image_organizer import alignTop
+                from batoolset.drawings.widgets.image_organizer import alignTop
                 alignTop(row) # ça ça marche
                 # seems ok too
 
@@ -355,10 +355,10 @@ class Panel(Rect2D):
         print('fig len', len(fig))  # --> ok
         #     logger.error('empty panel created there has to be an error somewhere')
 
-        from batoolset.draw.widgets.image_organizer import packY
+        from batoolset.drawings.widgets.image_organizer import packY
         # not necessarily that by the way
         # packY(fig, space=self.space)
-        from batoolset.draw.widgets.image_organizer import sameHeight
+        from batoolset.drawings.widgets.image_organizer import sameHeight
 
         # required
 
@@ -367,7 +367,7 @@ class Panel(Rect2D):
         sameHeight(self.images, space=self.space) # bug here
         print('arfter same height', self.boundingRect())
 
-        from batoolset.draw.widgets.image_group import group
+        from batoolset.drawings.widgets.image_group import group
         if self.width() != 0:
             group(*self.images).setToWidth(self.width())
         if self.height() !=0:
@@ -412,7 +412,7 @@ class Panel(Rect2D):
         # maybe bug is just because of not properly handling set to with and set to height
 
         # why the hell do I have a figure in panel really need to recode that
-        from batoolset.draw.widgets.col import col
+        from batoolset.drawings.widgets.col import col
         fig = col(space=self.space)
         self.rows=[]
 
@@ -502,7 +502,7 @@ class Panel(Rect2D):
     #     return extra_space
 
 if __name__ == '__main__':
-    from batoolset.draw.shapes.image2d import Image2D  # KEEP Really required to avoid circular imports
+    from batoolset.drawings.shapes.image2d import Image2D  # KEEP Really required to avoid circular imports
 
     img0 = Image2D('/E/Sample_images/counter/00.png')
     # img0.setLetter(TAText2D(

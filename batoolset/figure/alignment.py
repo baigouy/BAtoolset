@@ -9,7 +9,7 @@ set_UI()
 from deprecated import deprecated
 from qtpy.QtCore import QRectF
 
-from batoolset.draw.shapes.point2d import Point2D
+from batoolset.drawings.shapes.point2d import Point2D
 from batoolset.tools.logger import TA_logger
 import numpy as np
 
@@ -231,7 +231,7 @@ packing_modes = ['X','Y', '-X', '-Y']
 #                 last = img.x() + img.width(all=True)
 
 def pack2(space=3, mode=packing_modes[0], extra_border_mode=False, *objects_to_pack): # a cleaned and better version of packX
-    from batoolset.draw.shapes.image2d import Image2D
+    from batoolset.drawings.shapes.image2d import Image2D
 
     # check position
 

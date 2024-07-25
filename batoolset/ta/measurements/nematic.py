@@ -10,7 +10,7 @@ from skimage.measure import regionprops
 from skimage.measure import label
 from skimage.measure._regionprops import RegionProperties
 
-from batoolset.draw.shapes.line2d import Line2D
+from batoolset.drawings.shapes.line2d import Line2D
 
 def compute_stretch_nematic(pointsWithinArea_or_region, normalizeByArea=True):
     """

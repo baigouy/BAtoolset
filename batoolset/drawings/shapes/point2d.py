@@ -5,7 +5,7 @@ from math import sqrt
 
 from qtpy.QtCore import QRectF
 
-from batoolset.draw.shapes.circle2d import *
+from batoolset.drawings.shapes.circle2d import *
 from batoolset.tools.logger import TA_logger
 logger = TA_logger()
 

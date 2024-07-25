@@ -1,10 +1,10 @@
+from batoolset.javas.tools import get_JDK_HOME
 from batoolset.tools.logger import TA_logger  # logging
 logger = TA_logger()  # logging_level=TA_logger.DEBUG
 from batoolset.files.tools import smart_name_parser
 from batoolset.images.centralstore import ImageCentralStore
 import random
 import os
-import read_lif  # read Leica .lif files (requires numexpr)
 from builtins import super, int
 import warnings
 import skimage
@@ -22,7 +22,6 @@ from natsort import natsorted  # sort strings as humans would do
 import xml.etree.ElementTree as ET  # to handle xml metadata of images
 import base64
 import io
-import matplotlib.pyplot as plt
 import traceback
 from skimage.morphology import white_tophat, black_tophat
 from skimage.morphology import square
@@ -31,6 +30,7 @@ import platform
 import datetime as dt
 import sys
 from scipy import ndimage as ndi
+import read_lif  # read Leica .lif files (requires numexpr)
 
 # for future development
 # np = None
@@ -50,18 +50,41 @@ normalization_ranges = [[0, 1], [-1, 1]]
 def start_JVM():
     # NB BELOW IS MANDATORY TO HAVE SUPPORT FOR BIOFORMATS --> start_JVM SHOULD BE CALLED ONLY ONCE PER INSTANCE AND stop_JVM SHOULD BE CALLED ON LEAVE!
     try:
-        # raise Exception('test error') # force error
-        # Start the JVM when the application launches
+        JDK_HOME =get_JDK_HOME(8)
+        if os.path.exists(JDK_HOME):
+            os.environ['JAVA_HOME']=JDK_HOME
+            os.environ['JDK_HOME']=JDK_HOME
+
         import javabridge
         import bioformats
+        import psutil
 
-        javabridge.start_vm(class_path=bioformats.JARS, run_headless=True, max_heap_size='1G')
+        # Get the total system memory in bytes
+        total_memory = psutil.virtual_memory().total
+
+        # Calculate half of the system memory in bytes
+        half_memory = total_memory // 2
+
+        # Convert the memory to a string format suitable for the JVM (e.g., '1G', '512M')
+        if half_memory >= 1024 * 1024 * 1024:  # 1 GB
+            max_heap_size = f"{half_memory // (1024 * 1024 * 1024)}G"
+        elif half_memory >= 1024 * 1024:  # 1 MB
+            max_heap_size = f"{half_memory // (1024 * 1024)}M"
+        else:
+            # buy a new computer...
+            max_heap_size = f"{half_memory // 1024}K"
+        javabridge.start_vm(class_path=bioformats.JARS, run_headless=True, max_heap_size=max_heap_size)
     except:
         traceback.print_exc()
         logger.error('Could not instantiate javabridge bioformats will not work')
 
 def stop_JVM():
     try:
+        JDK_HOME = get_JDK_HOME(8)
+        if os.path.exists(JDK_HOME):
+            os.environ['JAVA_HOME'] = JDK_HOME
+            os.environ['JDK_HOME'] = JDK_HOME
+
         # This method is called when the window is closed
         import javabridge
         javabridge.kill_vm()
@@ -130,7 +153,6 @@ def read_file_with_bioformats(file_path):
 
     from bioformats import ImageReader, OMEXML
     import bioformats
-    import javabridge
 
     # Start the Java Virtual Machine
     # javabridge.start_vm(class_path=bioformats.JARS)
@@ -927,6 +949,7 @@ def img2Base64(img):
     else:
         # Assume pyplot image
         print('Please call this before plt.show() to avoid getting a blank output')
+        import matplotlib.pyplot as plt
         buf = io.BytesIO()
         plt.savefig(buf, format='png', bbox_inches='tight')  # Remove unnecessary white space around graph
         buf.seek(0)  # Rewind file
@@ -1180,7 +1203,7 @@ def get_voxel_conversion_factor(orig, return_111_if_none=True):
     Returns:
         tuple: A tuple of voxel dimensions.
     """
-    from batoolset.SQLite_tools.tools import get_voxel_size
+    from batoolset.SQLites.tools import get_voxel_size
     from batoolset.ta.database.sql import table_exists_in_db
 
     # first try to load it from the db to gain time and not do this too often
@@ -5117,6 +5140,15 @@ class ImageReader:
 
 
 if __name__ == '__main__':
+    import matplotlib.pyplot as plt
+
+    if True:
+        start_JVM() # this is really mandatory before using bioformats...
+        img = Img('/E/Sample_images/sample_images_me_for_demo/PD_images_from_cellimagelibrary.org_be_carefull_not_all_PD/samples_for_channel_split_and_Lut/16244_orig.zvi')
+        stop_JVM()
+        print(img.shape)
+        sys.exit(0)
+
     if True:
         from batoolset.tools.logger import TA_logger
 

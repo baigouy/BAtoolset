@@ -24,9 +24,9 @@ set_UI()# panel1D --> orientation --> hor/ver
 # panel2D --> more stuff and same size required
 import random
 
-from batoolset.draw.shapes.image2d import Image2D
-from batoolset.draw.shapes.point2d import Point2D
-from batoolset.draw.shapes.rect2d import Rect2D
+from batoolset.drawings.shapes.image2d import Image2D
+from batoolset.drawings.shapes.point2d import Point2D
+from batoolset.drawings.shapes.rect2d import Rect2D
 from qtpy.QtCore import QPointF, QRectF
 # from sympy import nsolve, exp, Symbol
 # logger

@@ -1,4 +1,4 @@
-from batoolset.draw.shapes.rectangle2d import Rectangle2D
+from batoolset.drawings.shapes.rectangle2d import Rectangle2D
 # from PyQt5.QtCore import QRectF, QSizeF
 from qtpy.QtCore import QRectF, QSizeF
 

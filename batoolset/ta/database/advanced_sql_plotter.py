@@ -57,7 +57,7 @@ import traceback
 
 from PIL import ImageDraw, Image
 
-from batoolset.draw.shapes.image2d import Image2D
+from batoolset.drawings.shapes.image2d import Image2D
 from batoolset.img import Img, PIL_to_numpy, invert
 from skimage.measure import regionprops
 import numpy as np

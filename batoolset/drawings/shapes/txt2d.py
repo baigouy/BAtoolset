@@ -1,9 +1,9 @@
 # TODO allow text for be written at an angle and determine it size then
 from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
-from batoolset.pyqt.tools import get_painter_transform_and_rotation
-from batoolset.draw.shapes.textorientation import get_angle
-from batoolset.draw.shapes.Position import Position
+from batoolset.pyqts.tools import get_painter_transform_and_rotation
+from batoolset.drawings.shapes.textorientation import get_angle
+from batoolset.drawings.shapes.Position import Position
 from qtpy import QtCore
 from qtpy.QtCore import QRect
 from qtpy.QtGui import QTextDocument, QTextOption
@@ -13,7 +13,7 @@ import sys
 from qtpy import QtGui
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QApplication
-from batoolset.draw.shapes.rectangle2d import Rectangle2D
+from batoolset.drawings.shapes.rectangle2d import Rectangle2D
 # log errors
 from batoolset.tools.logger import TA_logger
 logger = TA_logger()

@@ -64,7 +64,7 @@ def packY(things_to_align, space=3):
         img = things_to_align[i]
         print('2',img)
         if isinstance(img, list):
-            from batoolset.draw.widgets.image_group import group
+            from batoolset.drawings.widgets.image_group import group
             img = group(*img)
         # should I create a row of objects in fact I need a group and move everything with that --> TODO --> maybe
         if i != 0:

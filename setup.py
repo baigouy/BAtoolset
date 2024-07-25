@@ -52,6 +52,7 @@ setuptools.setup(
         # "python-javabridge",
         "pyautogui",
         "imagecodecs",
+        "psutil",
         # "zarr",
     ],
     extras_require={'all': [

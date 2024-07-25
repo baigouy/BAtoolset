@@ -1,17 +1,17 @@
 from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
-from batoolset.draw.shapes.freehand2d import Freehand2D
-from batoolset.draw.shapes.polyline2d import PolyLine2D
-from batoolset.serialization.tools import clone_object
+from batoolset.drawings.shapes.freehand2d import Freehand2D
+from batoolset.drawings.shapes.polyline2d import PolyLine2D
+from batoolset.serializations.tools import clone_object
 from qtpy.QtCore import QRectF, QPointF,QPoint
 from qtpy.QtGui import QTransform, QPolygonF,QPolygon
 import numpy as np
-from batoolset.draw.shapes import polyline2d, freehand2d
-from batoolset.draw.shapes.ellipse2d import Ellipse2D
-from batoolset.draw.shapes.line2d import Line2D
-from batoolset.draw.shapes.point2d import Point2D
-from batoolset.draw.shapes.polygon2d import Polygon2D
-from batoolset.draw.shapes.rectangle2d import Rectangle2D
+from batoolset.drawings.shapes import polyline2d, freehand2d
+from batoolset.drawings.shapes.ellipse2d import Ellipse2D
+from batoolset.drawings.shapes.line2d import Line2D
+from batoolset.drawings.shapes.point2d import Point2D
+from batoolset.drawings.shapes.polygon2d import Polygon2D
+from batoolset.drawings.shapes.rectangle2d import Rectangle2D
 
 
 def translated(shape, point):

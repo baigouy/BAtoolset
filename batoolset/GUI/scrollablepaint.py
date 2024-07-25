@@ -15,9 +15,9 @@ from qtpy.QtWidgets import QScrollArea, QVBoxLayout, QWidget, QSpinBox, QComboBo
     QHBoxLayout, QAction, QSlider
 import qtawesome as qta
 from qtpy.QtCore import Qt, QTimer
-from batoolset.draw.shapes.freehand2d import Freehand2D
-from batoolset.draw.shapes.image2d import Image2D
-from batoolset.draw.shapes.rect2d import Rect2D
+from batoolset.drawings.shapes.freehand2d import Freehand2D
+from batoolset.drawings.shapes.image2d import Image2D
+from batoolset.drawings.shapes.rect2d import Rect2D
 from batoolset.img import Img, int24_to_RGB, has_metadata
 from batoolset.GUI.paint2 import Createpaintwidget
 

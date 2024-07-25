@@ -5,19 +5,19 @@
 import os
 from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
-from batoolset.draw.shapes.txt2d import TAText2D
-from batoolset.pyqt.tools import getCtrlModifier
+from batoolset.drawings.shapes.txt2d import TAText2D
+from batoolset.pyqts.tools import getCtrlModifier
 from qtpy import QtCore
-from batoolset.draw.shapes.polygon2d import Polygon2D
-from batoolset.draw.shapes.line2d import Line2D
-from batoolset.draw.shapes.rect2d import Rect2D
-from batoolset.draw.shapes.square2d import Square2D
-from batoolset.draw.shapes.ellipse2d import Ellipse2D
-from batoolset.draw.shapes.circle2d import Circle2D
-from batoolset.draw.shapes.freehand2d import Freehand2D
-from batoolset.draw.shapes.point2d import Point2D
-from batoolset.draw.shapes.polyline2d import PolyLine2D
-from batoolset.draw.shapes.image2d import Image2D
+from batoolset.drawings.shapes.polygon2d import Polygon2D
+from batoolset.drawings.shapes.line2d import Line2D
+from batoolset.drawings.shapes.rect2d import Rect2D
+from batoolset.drawings.shapes.square2d import Square2D
+from batoolset.drawings.shapes.ellipse2d import Ellipse2D
+from batoolset.drawings.shapes.circle2d import Circle2D
+from batoolset.drawings.shapes.freehand2d import Freehand2D
+from batoolset.drawings.shapes.point2d import Point2D
+from batoolset.drawings.shapes.polyline2d import PolyLine2D
+from batoolset.drawings.shapes.image2d import Image2D
 from qtpy.QtCore import QPointF, QRectF
 from batoolset.tools.logger import TA_logger # logging
 logger = TA_logger()

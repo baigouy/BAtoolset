@@ -21,7 +21,7 @@ def sorting_key(obj):
             return ('free','relative') # if the object does not have a position assume it obeys free/relative positioning
 
 def groupby_position(objects):
-    from batoolset.draw.shapes.txt2d import TAText2D
+    from batoolset.drawings.shapes.txt2d import TAText2D
     if isinstance(objects, TAText2D):
         objects = [objects]
     # Sort the objects based on their positions

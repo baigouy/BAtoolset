@@ -225,7 +225,7 @@ def get_common_scaling_factor_taking_incompressibility_into_account(dimensions_i
     return common_scaling
 
 def get_master_bounds2(group_of_shapes):
-    # from batoolset.draw.shapes.group import Group
+    # from batoolset.drawings.shapes.group import Group
     bounds = QRectF()
 
     if group_of_shapes is None:

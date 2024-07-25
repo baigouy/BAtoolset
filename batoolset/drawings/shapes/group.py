@@ -3,7 +3,7 @@ from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
 import matplotlib.pyplot as plt
 import numpy as np
-# from batoolset.draw.shapes.vectorgraphics2d import VectorGraphics2D
+# from batoolset.drawings.shapes.vectorgraphics2d import VectorGraphics2D
 from batoolset.img import Img
 from batoolset.lists.tools import move_left, move_right, is_iterable
 import random
@@ -11,16 +11,16 @@ import sys
 import traceback
 # this will replace cols or rows and will be able to do both but more flexibly
 from timeit import default_timer as timer
-from batoolset.serialization.tools import create_objects_from_dict
-from batoolset.draw.shapes.image2d import Image2D
-from batoolset.draw.shapes.rectangle2d import Rectangle2D
-from batoolset.draw.shapes.txt2d import TAText2D
+from batoolset.serializations.tools import create_objects_from_dict
+from batoolset.drawings.shapes.image2d import Image2D
+from batoolset.drawings.shapes.rectangle2d import Rectangle2D
+from batoolset.drawings.shapes.txt2d import TAText2D
 from qtpy.QtCore import QRectF, QSizeF,QPointF
 from qtpy.QtWidgets import QApplication
 from qtpy.QtGui import QPainter, QColor, QBrush, QPen, QTransform
 from batoolset.figure.alignment import pack2, align2, align_positions
 from batoolset.tests.tools import are_ratios_almost_equal
-from batoolset.draw.shapes.compute_optimal_size_all_merged import resize_rects_within_total_width, \
+from batoolset.drawings.shapes.compute_optimal_size_all_merged import resize_rects_within_total_width, \
     resize_rects_within_total_height
 
 ORIENTATIONS = ["X","Y"] #,"grid"

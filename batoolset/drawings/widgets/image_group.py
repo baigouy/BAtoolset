@@ -1,7 +1,7 @@
 import os
 from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
-from batoolset.draw.shapes.rect2d import Rect2D
+from batoolset.drawings.shapes.rect2d import Rect2D
 from qtpy.QtCore import QPointF, QRectF
 from deprecated import deprecated
 # logger

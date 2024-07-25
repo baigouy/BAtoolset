@@ -3,7 +3,7 @@ import os
 
 from batoolset.settings.global_settings import set_UI  # set the UI to be used by qtpy
 set_UI()
-from batoolset.pyqt.tools import getCtrlModifier
+from batoolset.pyqts.tools import getCtrlModifier
 from qtpy import QtGui, QtWidgets
 from qtpy.QtCore import Qt, QMimeData
 from qtpy.QtWidgets import QTableWidget, QApplication, QAbstractItemView

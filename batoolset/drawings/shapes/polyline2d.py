@@ -6,7 +6,7 @@ from qtpy.QtCore import QPointF, Qt
 from qtpy.QtGui import QPainter, QBrush, QPen, QImage, QColor, QPolygonF
 # from qtpy.Qt
 # from qtpy.Qt import (QPaintEngine, QPaintDevice,  QTransform, QBrush)
-from batoolset.draw.shapes.polygon2d import Polygon2D
+from batoolset.drawings.shapes.polygon2d import Polygon2D
 
 from batoolset.tools.logger import TA_logger
 

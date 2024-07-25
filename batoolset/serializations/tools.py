@@ -4,9 +4,9 @@ from builtins import int
 from batoolset.files.tools import read_string_from_file
 import xml.etree.ElementTree as ET
 import xml.dom.minidom
-from batoolset.draw.shapes.txt2d import TAText2D
-from batoolset.draw.shapes.Position import Position
-# from batoolset.serialization.tools import deserialize_to_dict
+from batoolset.drawings.shapes.txt2d import TAText2D
+from batoolset.drawings.shapes.Position import Position
+# from batoolset.serializations.tools import deserialize_to_dict
 
 
 # see key=='coords_as_list' and not key=='range': # excetptions that should not be written as texts even though they are texts for exceptions
@@ -94,7 +94,7 @@ def create_objects_from_dict(objects_dict):
     return annotations
 
 def clone_object(objects, auto_unpack_if_single=True, overrides=None): # overrides offers the possibility to mutate one of the parameters of the clone!
-    from batoolset.draw.shapes.image2d import Image2D
+    from batoolset.drawings.shapes.image2d import Image2D
     clones = []
     if isinstance(objects, list) and not objects:
         return clones
@@ -123,20 +123,20 @@ def clone_object(objects, auto_unpack_if_single=True, overrides=None): # overrid
     return clones
 
 def create_object(object_type,properties):
-    from batoolset.draw.shapes.circle2d import Circle2D
-    from batoolset.draw.shapes.image2d import Image2D
-    from batoolset.draw.shapes.ellipse2d import Ellipse2D
-    from batoolset.draw.shapes.freehand2d import Freehand2D
-    from batoolset.draw.shapes.rectangle2d import Rectangle2D
-    from batoolset.draw.shapes.line2d import Line2D
-    from batoolset.draw.shapes.point2d import Point2D
-    from batoolset.draw.shapes.polygon2d import Polygon2D
-    from batoolset.draw.shapes.polyline2d import PolyLine2D
-    from batoolset.draw.shapes.scalebar import ScaleBar
-    from batoolset.draw.shapes.square2d import Square2D
-    from batoolset.draw.shapes.group import Group
-    from batoolset.draw.shapes.serializablefont import SerializableQFont
-    from batoolset.draw.shapes.serializableguiparams import SerializableGUIparameters
+    from batoolset.drawings.shapes.circle2d import Circle2D
+    from batoolset.drawings.shapes.image2d import Image2D
+    from batoolset.drawings.shapes.ellipse2d import Ellipse2D
+    from batoolset.drawings.shapes.freehand2d import Freehand2D
+    from batoolset.drawings.shapes.rectangle2d import Rectangle2D
+    from batoolset.drawings.shapes.line2d import Line2D
+    from batoolset.drawings.shapes.point2d import Point2D
+    from batoolset.drawings.shapes.polygon2d import Polygon2D
+    from batoolset.drawings.shapes.polyline2d import PolyLine2D
+    from batoolset.drawings.shapes.scalebar import ScaleBar
+    from batoolset.drawings.shapes.square2d import Square2D
+    from batoolset.drawings.shapes.group import Group
+    from batoolset.drawings.shapes.serializablefont import SerializableQFont
+    from batoolset.drawings.shapes.serializableguiparams import SerializableGUIparameters
 
     # print(object_type)
 
@@ -348,19 +348,19 @@ def has_custom_script(xml_string):
     return False
 
 if __name__ == '__main__':
-    # from batoolset.serialization.tools import object_to_xml, create_object
+    # from batoolset.serializations.tools import object_to_xml, create_object
     from batoolset.settings.global_settings import set_UI  # set the UI to qtpy
 
     set_UI()
-    from batoolset.draw.shapes.image2d import Rectangle2D
+    from batoolset.drawings.shapes.image2d import Rectangle2D
     from qtpy.QtCore import QRect, Qt, QRectF
-    from batoolset.draw.shapes.image2d import Image2D
+    from batoolset.drawings.shapes.image2d import Image2D
     import numpy as np
     import sys
     from qtpy.QtWidgets import QApplication
     from qtpy.QtGui import QFont
-    from batoolset.draw.shapes.group import Group
-    from batoolset.draw.shapes.serializablefont import SerializableQFont
+    from batoolset.drawings.shapes.group import Group
+    from batoolset.drawings.shapes.serializablefont import SerializableQFont
 
     app = QApplication(sys.argv)  # IMPORTANT KEEP !!!!!!!!!!!
 
@@ -1153,7 +1153,7 @@ self.img = fig
 #     from batoolset.settings.global_settings import set_UI  # set the UI to qtpy
 #
 #     set_UI()
-#     from batoolset.draw.shapes.image2d import Rectangle2D
+#     from batoolset.drawings.shapes.image2d import Rectangle2D
 #     from qtpy.QtCore import QRect, Qt, QRectF
 #
 #     test2 = Rectangle2D(QRectF(10, 0, 100, 256)) # the serialization is great but now I need to see how to reload the shit
@@ -1166,7 +1166,7 @@ self.img = fig
 #
 #
 #     if False:
-#         from batoolset.draw.shapes.image2d import Image2D
+#         from batoolset.drawings.shapes.image2d import Image2D
 #
 #
 #         same_img = Image2D('/E/Sample_images/EZF_SF_scientifig_EZFig/sample_images_svg/test.png')

@@ -3,7 +3,7 @@
 import os
 from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
-from batoolset.draw.shapes.rect2d import Rect2D
+from batoolset.drawings.shapes.rect2d import Rect2D
 from qtpy.QtCore import QPointF, QRectF
 # logger
 from batoolset.tools.logger import TA_logger
@@ -220,7 +220,7 @@ class col(Rect2D):
         painter.restore()
 
 if __name__ == '__main__':
-    from batoolset.draw.shapes.image2d import Image2D  # KEEP Really required to avoid circular imports
+    from batoolset.drawings.shapes.image2d import Image2D  # KEEP Really required to avoid circular imports
 
     img1 = Image2D('/E/Sample_images/counter/00.png')
     img2 = Image2D('/E/Sample_images/counter/01.png')

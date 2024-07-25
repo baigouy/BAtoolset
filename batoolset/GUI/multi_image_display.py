@@ -11,9 +11,9 @@ from qtpy.QtWidgets import QApplication, QGridLayout, QScrollArea, QLabel, QVBox
     QStyleOptionTitleBar, QMessageBox, QDialogButtonBox
 # from deprecated_demos.ta.wshed import Wshed
 from batoolset.ta.segmentation.neo_wshed import wshed
-# from batoolset.draw.widgets.paint import Createpaintwidget
+# from batoolset.drawings.widgets.paint import Createpaintwidget
 from batoolset.img import Img, RGB_to_int24
-from batoolset.draw.shapes.rect2d import Rect2D
+from batoolset.drawings.shapes.rect2d import Rect2D
 
 # TODO add shortcuts to zoom and so on so that I can handle it better
 # TODO maybe store the raw image in it

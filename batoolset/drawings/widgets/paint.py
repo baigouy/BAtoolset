@@ -5,7 +5,7 @@ from qtpy.QtCore import QRect, QTimer
 from qtpy.QtGui import QPixmap
 from qtpy.QtWidgets import QWidget
 
-from batoolset.draw.widgets.vectorial import VectorialDrawPane
+from batoolset.drawings.widgets.vectorial import VectorialDrawPane
 from qtpy.QtWidgets import QMenu, QApplication
 from qtpy import QtCore, QtGui
 

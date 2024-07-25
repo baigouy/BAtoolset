@@ -4,14 +4,14 @@
 import os
 from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
-from batoolset.pyqt.tools import getCtrlModifier
+from batoolset.pyqts.tools import getCtrlModifier
 import traceback
 from qtpy.QtGui import QKeySequence
 from skimage.measure import label, regionprops
 from qtpy.QtCore import QRect, QTimer, Qt
 from qtpy.QtWidgets import QWidget, QApplication, QMessageBox
 from batoolset.dialogs.opensave import saveFileDialog
-from batoolset.draw.widgets.vectorial import VectorialDrawPane
+from batoolset.drawings.widgets.vectorial import VectorialDrawPane
 from qtpy.QtWidgets import QMenu
 from qtpy import QtCore, QtGui, QtWidgets
 from batoolset.img import toQimage, Img, get_white_bounds, RGB_to_int24, is_binary, auto_scale, save_as_tiff

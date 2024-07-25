@@ -1,4 +1,4 @@
-from batoolset.draw.shapes.ellipse2d import *
+from batoolset.drawings.shapes.ellipse2d import *
 from batoolset.tools.logger import TA_logger
 
 logger = TA_logger()

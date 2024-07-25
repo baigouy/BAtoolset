@@ -3,7 +3,7 @@ import traceback
 import math
 import pandas
 from prettytable import PrettyTable
-import batoolset.SQLite_tools.tools
+import batoolset.SQLites.tools
 from batoolset.img import Img, has_metadata, _create_dir
 from batoolset.ta.selections.selection import convert_coords_to_IDs
 from batoolset.tools.early_stopper_class import early_stop
@@ -105,7 +105,7 @@ def get_table_columns(path_to_db, table_name):
       >>> get_table_columns('/media/teamPrudhomme/EqpPrudhomme2/Benoit_pr_Benjamin/coccinelles/latest images_20230614/raw images/N4N4_29_M_1a/ladybug_seg.db', 'elytras_shape')[:2]
       ['areas_without_holes', 'areas_with_holes']
     """
-    return batoolset.SQLite_tools.tools.get_table_columns(path_to_db, table_name)
+    return batoolset.SQLites.tools.get_table_columns(path_to_db, table_name)
 
 
 def remove_dupes_from_table_and_overwrite_table(db_path, table_name):

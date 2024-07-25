@@ -30,9 +30,9 @@ from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
 from qtpy import QtWidgets
 
-from batoolset.draw.shapes.image2d import Image2D
-from batoolset.draw.shapes.point2d import Point2D
-from batoolset.draw.shapes.rect2d import Rect2D
+from batoolset.drawings.shapes.image2d import Image2D
+from batoolset.drawings.shapes.point2d import Point2D
+from batoolset.drawings.shapes.rect2d import Rect2D
 from qtpy.QtCore import QPointF, QRectF
 # logger
 # from epyseg.ezfig import MyWidget

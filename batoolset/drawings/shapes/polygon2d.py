@@ -1,7 +1,7 @@
 from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
 import os
-from batoolset.draw.shapes.tools import rect_intersects_polygon, create_rect_centered_at, qpolygonf_to_list
+from batoolset.drawings.shapes.tools import rect_intersects_polygon, create_rect_centered_at, qpolygonf_to_list
 from qtpy import QtCore
 from qtpy.QtCore import QPointF, Qt
 from qtpy.QtGui import QPolygonF, QTransform

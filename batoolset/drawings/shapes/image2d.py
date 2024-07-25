@@ -5,15 +5,15 @@ from batoolset.luts.lut_minimal_test import PaletteCreator, list_available_luts,
 from batoolset.files.tools import smart_name_parser
 from batoolset.files.tools import get_consolidated_filename_from_parent
 from batoolset.strings.tools import reload_string_list, is_string_a_list_string, find_letter_before_h
-from batoolset.draw.shapes.automated_alignment_drawing_refactored import compute_translation_corrections
-from batoolset.pyqt.tools import check_antialiasing, copy_transform_without_rotation, rotate_image, copy_scale_only, \
+from batoolset.drawings.shapes.automated_alignment_drawing_refactored import compute_translation_corrections
+from batoolset.pyqts.tools import check_antialiasing, copy_transform_without_rotation, rotate_image, copy_scale_only, \
     copy_scale_and_translation_only, crop_image, get_shape_after_rotation_and_crop, tst_translation
-from batoolset.serialization.tools import create_objects_from_dict, object_to_xml
-from batoolset.matplolib.tools import get_fig_rect
+from batoolset.serializations.tools import create_objects_from_dict, object_to_xml
+from batoolset.matplolibs.tools import get_fig_rect
 import os
 import traceback
-from batoolset.draw.shapes.Position import groupby_position, Position
-from batoolset.draw.shapes.rectangle2d import Rectangle2D
+from batoolset.drawings.shapes.Position import groupby_position, Position
+from batoolset.drawings.shapes.rectangle2d import Rectangle2D
 import numpy as np
 import matplotlib.pyplot as plt
 from qtpy import QtGui
@@ -21,12 +21,12 @@ from qtpy.QtGui import QPainter, QColor, QBrush, QPen, QTransform, QFontMetrics,
 from qtpy.QtCore import Qt
 from qtpy.QtSvg import QSvgGenerator
 from qtpy.QtSvg import QSvgRenderer
-from batoolset.draw.shapes.line2d import Line2D
-from batoolset.draw.shapes.point2d import Point2D
+from batoolset.drawings.shapes.line2d import Line2D
+from batoolset.drawings.shapes.point2d import Point2D
 from batoolset.figure.alignment import alignRight, alignLeft, alignTop, alignBottom, alignCenterH, alignCenterV, packY, \
     packX, packYreverse, pack2, packing_modes
-from batoolset.draw.shapes.scalebar import ScaleBar
-from batoolset.draw.shapes.txt2d import TAText2D
+from batoolset.drawings.shapes.scalebar import ScaleBar
+from batoolset.drawings.shapes.txt2d import TAText2D
 
 from batoolset.img import Img, toQimage, RGB_to_BGR, guess_dimensions, max_proj, min_proj, avg_proj
 from qtpy.QtCore import QRectF, QPointF, QSize, QRect
