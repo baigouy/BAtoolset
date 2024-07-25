@@ -1,12 +1,12 @@
 from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
-from qtpy.QtGui import QPainter,QTransform,QImage,QPolygonF,QFont, QTextDocument,QColor,QPolygon
+from qtpy.QtGui import QPainter,QTransform,QImage,QPolygonF,QFont, QTextDocument,QColor,QPolygon,QPixmap
 from qtpy.QtCore import QRectF, QPointF, QSize, QRect, QPoint
 from qtpy.QtCore import Qt, QObject, QEvent
 from qtpy.QtWidgets import QHBoxLayout, QSlider,QLabel,QComboBox,QSpinBox,QWidget,QScrollArea,QDoubleSpinBox
 import math
+import numpy as np
 import sys
-
 
 # class WheelFilter(QObject):
 #     def eventFilter(self, obj, event):
@@ -44,7 +44,43 @@ import sys
 #     blocker = WheelBlocker(app)
 #     app.installEventFilter(blocker)
 
+def updateLutLabelPreview(lut, previewLabel, length, orientation='horizontal', height=16):
+    """
+    Updates the preview label with an image representing the LUT.
+
+    :param lut: List of color values in the LUT.
+    :param previewLabel: The QLabel where the preview image will be displayed.
+    :param length: The total length of the preview, including buttons and spacing.
+    :param orientation: The orientation of the LUT ('horizontal' or 'vertical').
+    """
+    image = QImage(256, height, QImage.Format_RGB32)
+
+    for i in range(256):
+        if isinstance(lut[i], str):
+            # If lut[i] is a string, convert it to QColor
+            color = QColor(lut[i])
+        elif isinstance(lut[i], (list, np.ndarray)) and len(lut[i]) == 3:
+            # If lut[i] is an RGB array, convert it to QColor
+            color = QColor(int(lut[i][0]), int(lut[i][1]), int(lut[i][2]))
+        else:
+            raise ValueError("LUT entry must be a color string or an RGB array")
+
+        for j in range(height):
+            image.setPixelColor(i, j, color)
+
+    pixmap = QPixmap.fromImage(image)
+    scaled_pixmap = pixmap.scaled(length, height, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+
+    if orientation != 'horizontal':
+        # Rotate the scaled pixmap 90 degrees clockwise for vertical orientation
+        transform = QTransform().rotate(90)
+        scaled_pixmap = scaled_pixmap.transformed(transform)
+
+    previewLabel.setPixmap(scaled_pixmap)
+
+
 def getCtrlModifierAsString():
+    import sys
     if sys.platform == "darwin":
         return "Meta"  # Command key on macOS
     # else:

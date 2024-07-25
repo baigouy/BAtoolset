@@ -11,6 +11,7 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 from batoolset.img import fig_to_numpy
 import base64
+import numexpr as ne
 
 def serialize_lut(lut_256_3):
     # see also /home/aigouy/mon_prog/Python/epyseg_pkg/personal/FigGen_EzFig2/trash/tst_base64_encode_the_whole_np_array.py
@@ -142,11 +143,10 @@ def list_available_luts(return_matplotlib_lib_luts_in_separate_database=False):
     """
     hash_pal = {
         "DEFAULT": "22,13,-23",
-        "GREEN": "0,3,0",
         "RED": "3,0,0",
+        "GREEN": "0,3,0",
         "BLUE": "0,0,3",
         "GRAY": "3,3,3",
-        "GREY": "3,3,3",
         "AFM_HOT": "34,35,36",
         "PACKING": "PACKING",
         "RED_HOT": "21,22,23",
@@ -451,6 +451,38 @@ class PaletteCreator:
 
         return equation
 
+    # def computeEquation(self, equation, variable, val):
+    #     """
+    #     Computes the result of an equation using the numexpr library.
+    #
+    #     Args:
+    #         equation (str): The equation to compute.
+    #         variable (str): The variable name in the equation.
+    #         val: The value for the variable.
+    #
+    #     Returns:
+    #         float: The computed result of the equation.
+    #
+    #     # Examples:
+    #     #     >>> palette_creator = PaletteCreator()
+    #     #     >>> result = palette_creator.computeEquation("2*a*(b/c)**2", "a", [1, 2, 2])
+    #     #     >>> print(result)
+    #     #     array([0.88888889, 0.44444444, 4.])
+    #     """
+    #     import numexpr as ne
+    #     var = {'a': np.array([1, 2, 2]), 'b': np.array([2, 1, 3]), 'c': np.array([3])}
+    #     print('TOO', ne.evaluate('2*a*(b/c)**2', local_dict=var))
+    #     try:
+    #         for i in range(10):
+    #             equation = equation.replace(str(i) + variable, str(i) + "*" + variable)
+    #         for i in range(10):
+    #             equation = equation.replace(variable + str(i), variable + "*" + str(i))
+    #
+    #         equation = equation.replace(variable, "(double)" + variable)
+    #         print(equation)
+    #     except:
+    #         traceback.print_exc()
+    #         return 0
     def computeEquation(self, equation, variable, val):
         """
         Computes the result of an equation using the numexpr library.
@@ -461,28 +493,29 @@ class PaletteCreator:
             val: The value for the variable.
 
         Returns:
-            float: The computed result of the equation.
-
-        # Examples:
-        #     >>> palette_creator = PaletteCreator()
-        #     >>> result = palette_creator.computeEquation("2*a*(b/c)**2", "a", [1, 2, 2])
-        #     >>> print(result)
-        #     array([0.88888889, 0.44444444, 4.])
+            numpy.ndarray: The computed result of the equation.
         """
-        import numexpr as ne
-        var = {'a': np.array([1, 2, 2]), 'b': np.array([2, 1, 3]), 'c': np.array([3])}
-        print('TOO', ne.evaluate('2*a*(b/c)**2', local_dict=var))
         try:
-            for i in range(10):
-                equation = equation.replace(str(i) + variable, str(i) + "*" + variable)
-            for i in range(10):
-                equation = equation.replace(variable + str(i), variable + "*" + str(i))
+            # Handle the special case where the equation is just a minus sign
+            if equation.strip() == '-':
+                return -np.array(val)
+            if equation.strip() == '+':
+                return np.array(val)
+            # Prepare the variable dictionary
+            var = {variable: np.array(val)}
 
-            equation = equation.replace(variable, "(double)" + variable)
-            print(equation)
-        except:
+            # Print the equation and variables for debugging
+            print(f"Evaluating equation: {equation}")
+            print(f"Variables: {var}")
+            # Evaluate the equation using numexpr
+            result = ne.evaluate(equation, local_dict=var)
+
+            return result
+        except Exception as e:
+            # Print the traceback and the error message
             traceback.print_exc()
-            return 0
+            print(f"Error evaluating the equation '{equation}': {e}")
+            return np.zeros_like(val)  # Return an array of zeros with the same shape as val
 
     def create5(self, red, green, blue):
         """
@@ -773,7 +806,7 @@ class PaletteCreator:
         final_palette = None
         try:
             r = g = b = 3
-            if "," in palette_name:
+            if palette_name and "," in palette_name:
                 formula_size = len(palette_name.split(","))
                 if formula_size == 3:
                     r = int(palette_name.split(",")[0])
@@ -786,15 +819,22 @@ class PaletteCreator:
                     equa2 = new_equa2
                     equa3 = new_equa3
 
+            # print('passing there')
+
             if abs(r) < 37 and abs(g) < 37 and abs(b) < 37:
                 return self.create3(palette_name)
 
             if abs(r) >= 37 and abs(g) >= 37 and abs(b) >= 37:
                 palette1 = self.createEmptyPalette()
             else:
-                palette1 = self.create(palette_name)
+                palette1 = self.create3(palette_name)
 
+            # print('inside equa', equa1, equa2, equa3)
             palette2 = self.create_from_formula(equa1, equa2, equa3)
+
+
+            # print(palette2.shape)
+
             final_palette = np.zeros((palette1.shape[0], palette1.shape[1]), dtype=np.uint8)
             l = 0
             l1 = 0
@@ -812,9 +852,14 @@ class PaletteCreator:
                 green = green2 if abs(g) >= 37 and abs(g) <= 39 else green1
                 blue = blue2 if abs(b) >= 37 and abs(b) <= 39 else blue1
 
-                final_palette[l, 0] = red
-                final_palette[l, 1] = green
-                final_palette[l, 2] = blue
+                # print('final_palette', final_palette.shape)
+                # print('red', red)
+                # print('green', green)
+                # print('blue', blue)
+
+                final_palette[l, 0] = red[0]
+                final_palette[l, 1] = green[1]
+                final_palette[l, 2] = blue[2]
                 l += 1
         except:
             traceback.print_exc()
