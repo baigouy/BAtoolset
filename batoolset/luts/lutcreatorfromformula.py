@@ -5,14 +5,11 @@ import sys
 import random
 from qtpy.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QTextEdit, QGroupBox, QMessageBox, QScrollArea,QSizePolicy,
+    QPushButton, QTextEdit, QGroupBox, QMessageBox, QScrollArea, QSizePolicy,
 )
 from qtpy.QtCore import Qt
 from qtpy.QtGui import QFont
-
 from batoolset.luts.lut_minimal_test import PaletteCreator, list_available_luts, apply_lut, lsm_LUT_to_numpy
-
-
 
 
 class PaletteFormulaEditor(QWidget):
@@ -193,6 +190,14 @@ class PaletteFormulaEditor(QWidget):
         else:
             if self.check_validity():
                 QMessageBox.warning(self, "No Palette", "No palette to display. Please generate a palette first.")
+
+    def get_palette(self):
+        """
+        Returns the current LUT.
+
+        :return: The current LUT or None if no LUT has been generated.
+        """
+        return self.palette
 
 
 if __name__ == '__main__':

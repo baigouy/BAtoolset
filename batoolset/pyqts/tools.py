@@ -44,14 +44,15 @@ import sys
 #     blocker = WheelBlocker(app)
 #     app.installEventFilter(blocker)
 
-def updateLutLabelPreview(lut, previewLabel, length, orientation='horizontal', height=16):
+def createPixmapFromLUT(lut, height=16, length=256, orientation='horizontal'):
     """
-    Updates the preview label with an image representing the LUT.
+    Creates a QPixmap from the LUT with the specified orientation and dimensions.
 
     :param lut: List of color values in the LUT.
-    :param previewLabel: The QLabel where the preview image will be displayed.
-    :param length: The total length of the preview, including buttons and spacing.
+    :param height: The height of the LUT preview.
+    :param length: The length of the preview (number of colors).
     :param orientation: The orientation of the LUT ('horizontal' or 'vertical').
+    :return: QPixmap representing the LUT.
     """
     image = QImage(256, height, QImage.Format_RGB32)
 
@@ -76,7 +77,28 @@ def updateLutLabelPreview(lut, previewLabel, length, orientation='horizontal', h
         transform = QTransform().rotate(90)
         scaled_pixmap = scaled_pixmap.transformed(transform)
 
-    previewLabel.setPixmap(scaled_pixmap)
+    return scaled_pixmap
+
+def setPixmapToLabel(pixmap, label):
+    """
+    Sets the given QPixmap to the provided QLabel.
+
+    :param pixmap: QPixmap to set on the label.
+    :param label: QLabel to display the pixmap.
+    """
+    label.setPixmap(pixmap)
+
+def updateLutLabelPreview(lut, previewLabel, length, orientation='horizontal', height=16):
+    """
+    Updates the preview label with an image representing the LUT.
+
+    :param lut: List of color values in the LUT.
+    :param previewLabel: The QLabel where the preview image will be displayed.
+    :param length: The total length of the preview, including buttons and spacing.
+    :param orientation: The orientation of the LUT ('horizontal' or 'vertical').
+    """
+    pixmap = setPixmapToLabel(createPixmapFromLUT(lut, previewLabel, length, orientation=orientation, height=height))
+    setPixmapToLabel(pixmap,previewLabel)
 
 
 def getCtrlModifierAsString():
