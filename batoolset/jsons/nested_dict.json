@@ -1,0 +1,15 @@
+{
+    "key1": "value1",
+    "key2": {
+        "subkey1": "subvalue1",
+        "subkey2": {
+            "subsubkey1": "subsubvalue1",
+            "subsubkey2": "subsubvalue2"
+        }
+    },
+    "key3": [
+        "list_item1",
+        "list_item2",
+        "list_item3"
+    ]
+}
