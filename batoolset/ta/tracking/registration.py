@@ -47,6 +47,30 @@ def pre_register_images(orig_t0, orig_t1, apply_to_orig_t0=False):
     else:
         return apply_translation(orig_t0, -gloabl_t0, -gloabl_t1)
 
+def _translated_tile(img, y, x, tile_height, tile_width, ty, tx):
+    """
+    Returns apply_translation(img, ty, tx)[y:y + tile_height, x:x + tile_width] (0 outside of the image)
+    without warping the whole image. Only valid for integer translations of 2D images (nearest neighbour warp of an
+    integer translation is a plain shift).
+    """
+    height, width = img.shape[:2]
+    y_end = min(y + tile_height, height)
+    x_end = min(x + tile_width, width)
+    # same output dtype as transform.warp (depends on the skimage version for order=0)
+    warp_dtype = transform.warp(img[:1, :1], inverse_map=transform.AffineTransform(), order=0, preserve_range=True).dtype
+    out = np.zeros((y_end - y, x_end - x), dtype=warp_dtype)
+    ty = int(ty)
+    tx = int(tx)
+    # out[r, c] = img[r - ty, c - tx] for the source pixels inside the image
+    r0 = max(y, ty)
+    r1 = min(y_end, height + ty)
+    c0 = max(x, tx)
+    c1 = min(x_end, width + tx)
+    if r0 < r1 and c0 < c1:
+        out[r0 - y:r1 - y, c0 - x:c1 - x] = img[r0 - ty:r1 - ty, c0 - tx:c1 - tx]
+    return out
+
+
 def get_pyramidal_registration(orig_t0, orig_t1, depth=2, threshold_translation=20):
     """
     Performs pyramidal registration between two images.
@@ -88,11 +112,16 @@ def get_pyramidal_registration(orig_t0, orig_t1, depth=2, threshold_translation=
 
         for y in range(0, height, tile_height):
             for x in range(0, width, tile_width):
-                afine_tf = transform.AffineTransform(
-                    translation=(-translation_matrix[y, x, 1], -translation_matrix[y, x, 0]))
-                translated = transform.warp(orig_t0, inverse_map=afine_tf, order=0, preserve_range=True)
-
-                tile_t0 = translated[y:y + tile_height, x:x + tile_width]
+                ty = translation_matrix[y, x, 0]
+                tx = translation_matrix[y, x, 1]
+                if orig_t0.ndim == 2 and float(ty).is_integer() and float(tx).is_integer():
+                    # phase_cross_correlation shifts are integers --> exact shifted copy of the tile only
+                    tile_t0 = _translated_tile(orig_t0, y, x, tile_height, tile_width, ty, tx)
+                else:
+                    afine_tf = transform.AffineTransform(
+                        translation=(-translation_matrix[y, x, 1], -translation_matrix[y, x, 0]))
+                    translated = transform.warp(orig_t0, inverse_map=afine_tf, order=0, preserve_range=True)
+                    tile_t0 = translated[y:y + tile_height, x:x + tile_width]
                 tile_t1 = orig_t1[y:y + tile_height, x:x + tile_width]
 
                 shift, error, diffphase = phase_cross_correlation(tile_t0, tile_t1)

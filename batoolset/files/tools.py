@@ -348,7 +348,11 @@ def first_image_tracking(mask_t0, labels_t0, regprps=None, assigned_ids=None, se
         else:
             new_col = get_unique_random_color_int24(forbidden_colors=assigned_ids, assign_new_col_to_forbidden=True)
 
-        tracks_t0[labels_t0 == iii + 1] = new_col
+        if region.label == iii + 1:
+            # same pixels as labels_t0 == iii + 1 but without scanning the whole image for every cell
+            tracks_t0[region.coords[:, 0], region.coords[:, 1]] = new_col
+        else:
+            tracks_t0[labels_t0 == iii + 1] = new_col
 
     tracks_t0[labels_t0 == 0] = 0xFFFFFF
     # save the image or return it
@@ -416,7 +420,11 @@ def assign_random_ID_to_missing_cells(RGB24img, labels, regprps=None, assigned_i
 
         if color_of_first_pixel_of_potential_match == 0:
             new_col = get_unique_random_color_int24(forbidden_colors=assigned_ids, assign_new_col_to_forbidden=True)
-            RGB24img[labels == labels[region.coords[0][0], region.coords[0][1]]] = new_col
+            if labels[region.coords[0][0], region.coords[0][1]] == region.label:
+                # same pixels as the comparison below but without scanning the whole image for every cell
+                RGB24img[region.coords[:, 0], region.coords[:, 1]] = new_col
+            else:
+                RGB24img[labels == labels[region.coords[0][0], region.coords[0][1]]] = new_col
 
     return RGB24img
 

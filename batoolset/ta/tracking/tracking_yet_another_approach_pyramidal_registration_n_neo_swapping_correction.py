@@ -48,7 +48,7 @@ __DEBUG__ = False
 # KEEP  for the parameter below if cells are big one can decrease it for some images it does make a big difference!!! --> TODO SET THIS AS A
 from batoolset.ta.tracking.tracking_error_detector_and_fixer import find_vertices, associate_cell_to_its_neighbors2, \
     associate_cells_to_neighbors_ID_in_dict, compute_neighbor_score, optimize_score, get_cells_in_image_n_fisrt_pixel, \
-    map_track_id_to_label, apply_color_to_labels
+    map_track_id_to_label, apply_color_to_labels, associate_cell_to_its_neighbors_fast, optimize_score_fast
 
 
 # PYRAMIDAL_DEPTH = 3  # 2 #3 # computing pyramidal translation can be time consuming and the gain vs time cost is not always worth it
@@ -227,7 +227,9 @@ def track_cells_dynamic_tissue(path, channel=None, PYRAMIDAL_DEPTH=3, MAX_ITER=1
 
         matched_cells = {}
 
-        matched_cells_in_t1 = []
+        matched_cells_in_t1 = set()
+        # label of t1 -> track id; applied to the whole image at once below (instead of one full image comparison per cell)
+        label_to_track = np.zeros(int(labels_t1.max()) + 1, dtype=np.uint32)
         # matched_cells_in_t1_correspondance = {}
 
         # TODO REMOVE just raw alignment to try to see if post process error
@@ -235,7 +237,6 @@ def track_cells_dynamic_tissue(path, channel=None, PYRAMIDAL_DEPTH=3, MAX_ITER=1
 
         #
 
-        tracks = np.zeros_like(mask_t1, dtype=np.uint32)
         for centroid_t0 in centroids_t0:
 
             t0 = translation_matrix[int(centroid_t0[0]), int(centroid_t0[1]), 0]
@@ -279,8 +280,8 @@ def track_cells_dynamic_tissue(path, channel=None, PYRAMIDAL_DEPTH=3, MAX_ITER=1
                         # import sys
                         # sys.exit(0)
 
-                    tracks[labels_t1 == possible_matching_cell] = cell_id_in_t0
-                    matched_cells_in_t1.append(possible_matching_cell)
+                    label_to_track[possible_matching_cell] = cell_id_in_t0
+                    matched_cells_in_t1.add(possible_matching_cell)
 
                     if __DEBUG__:
                         if labels_t0[int(centroid_t0[0]), int(centroid_t0[1])] in matched_cells:
@@ -299,40 +300,8 @@ def track_cells_dynamic_tissue(path, channel=None, PYRAMIDAL_DEPTH=3, MAX_ITER=1
             print('all_matched_cells', matched_cells)  # all is ok
 
         # very good in fact
-
-        # missing_cells_t1 = []
-        matched_cells_ids = []
-
-        for iii, region in enumerate(rps_t1_mask):
-            color = tracks[region.coords[0][0], region.coords[0][1]]
-            if color == 0:
-                # missing_cells_t1.append(iii)
-                pass
-            else:
-                matched_cells_ids.append(color)
-
-        if __DEBUG__:
-            # print('missing_cells_t1', len(missing_cells_t1), '/', len(rps_t1_mask), missing_cells_t1)
-            print('matched_cells_ids', len(matched_cells_ids), '/', len(rps_t1_mask), matched_cells_ids)
-
-        labels_tracking_t0 = measure.label(tracked_cells_t0, connectivity=1, background=0xFFFFFF)
-
-        # plt.imshow(tracked_cells_t0[...,0], cmap='gray') #
-        # plt.show()
-
-        rps_t0 = regionprops(labels_tracking_t0)
-
-        unmatched_cells_in_t0 = []
-        # all ok so why bug there
-        for iii, region in enumerate(rps_t0):
-            # there is a bug there and I don't get it
-            color = tracked_cells_t0[region.coords[0][0], region.coords[0][1]]
-            # print(color)  # why always the same color -->
-            if color not in matched_cells_ids:  # why bug --> is it due to hash error
-                unmatched_cells_in_t0.append(iii)
-
-        if __DEBUG__:
-            print('missing_cells_t0', len(unmatched_cells_in_t0), '/', len(rps_t0), unmatched_cells_in_t0)
+        # label 0 (membranes) and unmatched labels stay 0
+        tracks = label_to_track[labels_t1]
 
         # I have already added them --> REDUNDANT AND I AM NOT EVEB SURE I USE THE MATCHING PAIRS --> REMOVE THEM no it's ok
         def associate_cell_id_to_idx(rps, image):
@@ -407,8 +376,7 @@ def track_cells_dynamic_tissue(path, channel=None, PYRAMIDAL_DEPTH=3, MAX_ITER=1
         # maybe also if too many rejected changes --> ignore
         # DO I NEED SO MUCH PYRAMIDAL REG WITH SUCH A POWERFUL ALGO ??? --> probably not ??? --> check that and really compare to the other method and clean code heavily !!!
 
-        cells_and_their_neighbors_minus_1 = np.unique(
-            np.asarray(associate_cell_to_its_neighbors2(vertices_t_minus_1, track_t_minus_1)), axis=0)
+        cells_and_their_neighbors_minus_1 = associate_cell_to_its_neighbors_fast(vertices_t_minus_1, track_t_minus_1)
         cells_and_their_neighbors_minus_1 = associate_cells_to_neighbors_ID_in_dict(cells_and_their_neighbors_minus_1)
         cells_in_t_minus_1 = np.unique(track_t_minus_1)
         # print('neighbs found', cells_and_their_neighbors_minus_1[10287288])
@@ -430,8 +398,7 @@ def track_cells_dynamic_tissue(path, channel=None, PYRAMIDAL_DEPTH=3, MAX_ITER=1
 
             # get cells and their neigbs for -1 and 0 and do a scoring --> will highlight potential swapping and or division and or other things in a way --> REALLY TRY THAT
 
-            cells_and_their_neighbors_cur = np.unique(
-                np.asarray(associate_cell_to_its_neighbors2(vertices_t_cur, track_t_cur)), axis=0)
+            cells_and_their_neighbors_cur = associate_cell_to_its_neighbors_fast(vertices_t_cur, track_t_cur)
             cells_and_their_neighbors_cur = associate_cells_to_neighbors_ID_in_dict(cells_and_their_neighbors_cur)
 
             # FOR DEBUG
@@ -534,7 +501,7 @@ def track_cells_dynamic_tissue(path, channel=None, PYRAMIDAL_DEPTH=3, MAX_ITER=1
                 # we update both the cells and their local correspondance --> I think I have it --> just need few more crosses to identify more errors
                 # can I use that as a tracking algo on top of the other with a minimization of the stuff and just do the coloring in the end --> TODO
 
-                cells_and_their_neighbors_cur, map_tracks_n_label_t_cur, last_score_reached = optimize_score(
+                cells_and_their_neighbors_cur, map_tracks_n_label_t_cur, last_score_reached = optimize_score_fast(
                     cells_and_their_neighbors_cur, cells_and_their_neighbors_minus_1,
                     cells_present_in_t_cur_but_absent_in_t_minus_1_score, map_tracks_n_label_t_cur, threshold=threshold)
                 # print('map_tracks_n_label_t_cur2',map_tracks_n_label_t_cur2)

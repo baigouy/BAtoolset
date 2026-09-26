@@ -259,6 +259,69 @@ def associate_cell_to_its_neighbors2(vertices_coords, RGB24img, bg_color=0xFFFFF
     return pairs
 
 
+def associate_cell_to_its_neighbors_fast(vertices_coords, RGB24img, bg_color=0xFFFFFF):
+    """
+    Vectorized equivalent of np.unique(np.asarray(associate_cell_to_its_neighbors2(...)), axis=0).
+
+    For every vertex, all the pairs of different non background ids found in its 3x3 neighbourhood (clipped at the
+    image border) are neighbours (both ways).
+
+    Args:
+        vertices_coords (numpy.ndarray): (N, 2) array of (y, x) vertex coordinates.
+        RGB24img (numpy.ndarray): int24 image of cell ids.
+        bg_color (int, optional): Background color. Defaults to 0xFFFFFF.
+
+    Returns:
+        numpy.ndarray: sorted unique (M, 2) array of neighbouring id pairs.
+    """
+    vertices_coords = np.asarray(vertices_coords)
+    if vertices_coords.size == 0:
+        return np.unique(np.asarray([]), axis=0)
+    ys = vertices_coords[:, 0].astype(np.int64)
+    xs = vertices_coords[:, 1].astype(np.int64)
+    height, width = RGB24img.shape[:2]
+    values = []
+    for dy in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            yy = ys + dy
+            xx = xs + dx
+            inside = (yy >= 0) & (yy < height) & (xx >= 0) & (xx < width)
+            # pixels outside of the image are ignored like the background
+            vals = np.full(ys.shape, bg_color, dtype=RGB24img.dtype)
+            vals[inside] = RGB24img[yy[inside], xx[inside]]
+            values.append(vals)
+    all_values = np.stack(values)
+    # ids fitting in 32 bits --> a pair packed as one uint64 key sorts like the (a, b) rows (much faster than axis=0)
+    packable = np.issubdtype(all_values.dtype, np.integer) and (all_values.size == 0 or (
+            all_values.min() >= 0 and int(all_values.max()) < 2 ** 32))
+    pairs = []
+    for i in range(len(values)):
+        for j in range(i + 1, len(values)):
+            a = values[i]
+            b = values[j]
+            valid = (a != b) & (a != bg_color) & (b != bg_color)
+            if np.any(valid):
+                a = a[valid]
+                b = b[valid]
+                if packable:
+                    a = a.astype(np.uint64)
+                    b = b.astype(np.uint64)
+                    pairs.append((a << np.uint64(32)) | b)
+                    pairs.append((b << np.uint64(32)) | a)
+                else:
+                    pairs.append(np.stack([a, b], axis=1))
+                    pairs.append(np.stack([b, a], axis=1))
+    if not pairs:
+        return np.unique(np.asarray([]), axis=0)
+    if not packable:
+        return np.unique(np.concatenate(pairs, axis=0), axis=0)
+    keys = np.unique(np.concatenate(pairs))
+    out = np.empty((len(keys), 2), dtype=RGB24img.dtype)
+    out[:, 0] = keys >> np.uint64(32)
+    out[:, 1] = keys & np.uint64(0xFFFFFFFF)
+    return out
+
+
 # @njit
 def associate_cell_to_its_neighbors(RGB24img):
     """
@@ -556,12 +619,13 @@ def apply_color_to_labels(lab_t_cur, map_tracks_n_label_t_cur):
         ndarray: Updated label image with applied color mapping.
 
     """
-    tracked_cells = np.zeros_like(lab_t_cur)
-
+    # lookup table instead of one full image comparison per cell (same result, the last mapping of a label wins)
+    max_label = int(lab_t_cur.max()) if lab_t_cur.size else 0
+    lut = np.zeros(max_label + 1, dtype=lab_t_cur.dtype)
     for k, v in map_tracks_n_label_t_cur:
-        tracked_cells[lab_t_cur == v] = k
-
-    return tracked_cells
+        if 0 <= v <= max_label:
+            lut[v] = k
+    return lut[lab_t_cur]
 
 def map_track_id_to_label(first_pixels_t_cur, track_t_cur, lab_t_cur):
     """
@@ -1254,6 +1318,225 @@ def optimize_score(cells_and_their_neighbors_cur, cells_and_their_neighbors_t_ot
     # nb could also return score to see if worth continuing
 
     return cells_and_their_neighbors_cur, tmp_map_tracks_n_label_t_cur, initial_score  # need reconvert it to an array
+
+
+def _neighbor_matrices(cur_keys, cells_and_their_neighbors_cur, other_keys, cells_and_their_neighbors_t_other):
+    """
+    Binary sparse (cells x neighbour ids) matrices of the neighbour sets plus the neighbour list lengths (duplicates
+    included, as in pairwise_score).
+    """
+    from scipy.sparse import csr_matrix
+    vocabulary = {}
+
+    def build(keys, neighbors):
+        rows = []
+        cols = []
+        lens = np.empty(len(keys), dtype=np.int64)
+        for r, k in enumerate(keys):
+            lst = neighbors[k]
+            lens[r] = len(lst)
+            for n in set(lst):
+                rows.append(r)
+                cols.append(vocabulary.setdefault(n, len(vocabulary)))
+        return rows, cols, lens
+
+    rows_cur, cols_cur, lens_cur = build(cur_keys, cells_and_their_neighbors_cur)
+    rows_oth, cols_oth, lens_oth = build(other_keys, cells_and_their_neighbors_t_other)
+    size = max(len(vocabulary), 1)
+    mat_cur = csr_matrix((np.ones(len(rows_cur), dtype=np.int64), (rows_cur, cols_cur)), shape=(len(cur_keys), size))
+    mat_oth = csr_matrix((np.ones(len(rows_oth), dtype=np.int64), (rows_oth, cols_oth)), shape=(len(other_keys), size))
+    return mat_cur, lens_cur, mat_oth, lens_oth
+
+
+def _pairwise_scores(mat_a, lens_a, mat_b_rows, lens_b_rows):
+    """
+    pairwise_score of every row of mat_a against every row of mat_b_rows --> (len(a), len(b)) float array.
+    Same float values as pairwise_score (exact integer numerator and denominator, one correctly rounded division).
+    """
+    inter = (mat_a @ mat_b_rows.T).toarray()
+    return (inter * 2) / (lens_a[:, None] + lens_b_rows[None, :])
+
+
+def optimize_score_fast(cells_and_their_neighbors_cur, cells_and_their_neighbors_t_other, current_cells_n_score,
+                        map_tracks_n_label_t_cur, threshold=0.5):
+    """
+    Faster drop-in replacement of optimize_score that returns exactly the same results.
+
+    The candidate search is done with sparse matrix products instead of python loops over all pairs of cells and
+    after each tentative change only the scores of the modified cells are recomputed (the global score is still summed
+    in the same order as compute_neighbor_score so that the float values are identical). Rejected changes are undone
+    locally instead of deep copying the whole neighbourhood dict.
+
+    Args and returns: see optimize_score.
+    """
+    cur = cells_and_their_neighbors_cur
+    other = cells_and_their_neighbors_t_other
+    tmp_map_tracks_n_label_t_cur = {k: v for k, v in map_tracks_n_label_t_cur}
+
+    possible_swapping_pairs = {}
+    possible_assignment = {}
+
+    scores_sorted_ascending = dict(sorted(current_cells_n_score.items(), key=operator.itemgetter(1)))
+    low_scores_to_check = [cell for cell in scores_sorted_ascending.keys() if
+                           scores_sorted_ascending[cell] <= threshold]
+
+    cur_keys = list(cur.keys())
+    other_keys = list(other.keys())
+    cur_index = {k: i for i, k in enumerate(cur_keys)}
+    other_index = {k: i for i, k in enumerate(other_keys)}
+    mat_cur, lens_cur, mat_oth, lens_oth = _neighbor_matrices(cur_keys, cur, other_keys, other)
+
+    # low score cells present in the other image --> best matching cell of the current image (last max, >=)
+    in_other = [cell for cell in low_scores_to_check if current_cells_n_score[cell] < 1.0 and cell in other_index]
+    not_in_other = [cell for cell in low_scores_to_check if current_cells_n_score[cell] < 1.0 and cell not in other_index]
+    best_swap = {}
+    if in_other and cur_keys:
+        rows = [other_index[cell] for cell in in_other]
+        scores = _pairwise_scores(mat_cur, lens_cur, mat_oth[rows], lens_oth[rows])
+        for col, cell in enumerate(in_other):
+            column = scores[:, col]
+            if cell in cur_index:
+                column[cur_index[cell]] = -np.inf
+            best = column.max()
+            if best >= current_cells_n_score[cell]:
+                best_swap[cell] = cur_keys[len(column) - 1 - int(np.argmax(column[::-1] == best))]
+    # low score cells absent from the other image --> best matching cell of the other image (first max, >)
+    best_assignment = {}
+    if not_in_other and other_keys:
+        rows = [cur_index[cell] for cell in not_in_other]
+        scores = _pairwise_scores(mat_oth, lens_oth, mat_cur[rows], lens_cur[rows])
+        for col, cell in enumerate(not_in_other):
+            column = scores[:, col]
+            if cell in other_index:
+                column[other_index[cell]] = -np.inf
+            best = column.max()
+            if best > current_cells_n_score[cell]:
+                best_assignment[cell] = other_keys[int(np.argmax(column == best))]
+    for cell in low_scores_to_check:
+        if cell in best_swap:
+            possible_swapping_pairs[cell] = best_swap[cell]
+        elif cell in best_assignment:
+            possible_assignment[cell] = best_assignment[cell]
+
+    # cells lost from the other image that match a poorly scored cell of the current image better (last max, >=)
+    missing_cells_from_prev = set(cells_and_their_neighbors_t_other.keys()) - set(cells_and_their_neighbors_cur.keys())
+    if missing_cells_from_prev and cur_keys:
+        missing = list(missing_cells_from_prev)
+        rows = [other_index[cell] for cell in missing]
+        scores = _pairwise_scores(mat_cur, lens_cur, mat_oth[rows], lens_oth[rows])
+        own_scores = np.asarray([current_cells_n_score[c] for c in cur_keys], dtype=np.float64)
+        for col, cell in enumerate(missing):
+            column = scores[:, col]
+            eligible = (own_scores < 1.) & (column >= own_scores)
+            if not np.any(eligible):
+                continue
+            column = np.where(eligible, column, -np.inf)
+            best = column.max()
+            possible_assignment[cur_keys[len(column) - 1 - int(np.argmax(column[::-1] == best))]] = cell
+
+    initial_score = sum(current_cells_n_score.values())
+
+    # per cell scores, the global score is re-summed in dict order exactly like compute_neighbor_score
+    cell_scores = {}
+
+    def rescore(keys):
+        for k in keys:
+            if k in cur and k in other:
+                cell_scores[k] = pairwise_score(cur[k], other[k])
+
+    def global_score():
+        sum_score = 0
+        for cell in cur:
+            if cell in other:
+                sum_score += cell_scores[cell]
+        return sum_score
+
+    rescore(cur.keys())
+
+    final_validated_changes = {}
+
+    keys_to_remove_in_assignment = [k for k, v in possible_assignment.items() if v in cur.keys()]
+    for k in keys_to_remove_in_assignment:
+        del possible_assignment[k]
+
+    for cell, val in possible_assignment.items():
+        order = list(cur.keys())
+        old = {}
+
+        def set_value(k, v):
+            if k not in old:
+                old[k] = cur[k]
+            cur[k] = v
+
+        neighbs_cell = cur[cell]
+        for neigb in neighbs_cell:
+            set_value(neigb, [id if id != cell else val for id in cur[neigb]])
+        if cell not in old:
+            old[cell] = cur[cell]
+        if val in cur and val not in old:
+            # val may already exist if an earlier assignment to the same val was accepted
+            old[val] = cur[val]
+        cur[val] = cur[cell]
+        del cur[cell]
+        rescore(list(old.keys()) + [val])
+        new_score = global_score()
+
+        if new_score <= initial_score:
+            # restore the dict exactly (content and order)
+            restored = {k: (old[k] if k in old else cur[k]) for k in order}
+            cur.clear()
+            cur.update(restored)
+            cell_scores.pop(val, None)
+            rescore(old.keys())
+        else:
+            initial_score = new_score
+            final_validated_changes[cell] = val
+            cell_scores.pop(cell, None)
+            tmp_map_tracks_n_label_t_cur[val] = tmp_map_tracks_n_label_t_cur[cell]
+            del tmp_map_tracks_n_label_t_cur[cell]
+
+    for key, val in possible_swapping_pairs.items():
+        if key not in cur:
+            continue
+        cell = key
+        if val not in cur.keys():
+            continue
+        if val in final_validated_changes.keys():
+            if final_validated_changes[val] == key:
+                # prevent reswapping an already swapped stuff --> move on
+                continue
+        old = {}
+
+        def set_value(k, v):
+            if k not in old:
+                old[k] = cur[k]
+            cur[k] = v
+
+        neighbs_cell = cur[cell]
+        for neigb in neighbs_cell:
+            set_value(neigb, [id if id != cell else val for id in cur[neigb]])
+        neighbs_val = cur[val]
+        for neigb in neighbs_val:
+            set_value(neigb, [id if id != val else cell for id in cur[neigb]])
+        value_cell = cur[cell]
+        value_val = cur[val]
+        set_value(cell, value_val)
+        set_value(val, value_cell)
+        rescore(old.keys())
+        new_score = global_score()
+
+        if new_score <= initial_score:
+            for k, v in old.items():
+                cur[k] = v
+            rescore(old.keys())
+        else:
+            initial_score = new_score
+            final_validated_changes[cell] = val
+            tmp_map_tracks_n_label_t_cur[cell], tmp_map_tracks_n_label_t_cur[val] = \
+                tmp_map_tracks_n_label_t_cur[val], tmp_map_tracks_n_label_t_cur[cell]
+
+    tmp_map_tracks_n_label_t_cur = np.array(list(tmp_map_tracks_n_label_t_cur.items()))
+    return cur, tmp_map_tracks_n_label_t_cur, initial_score
 
 
 # this is a local and thereby faster version of the swap stuff
