@@ -1104,21 +1104,17 @@ def sort_col_numpy(unsorted_data, freq=None, ignore_None_and_string=True, force_
             lower = freq
             upper = freq
 
+    # index of the first/last value kept once the lower/upper fraction of the values is excluded (sorted_data[-0] used
+    # to return the minimum as the maximum when upper * length rounded to 0)
+    low_idx = 0
+    high_idx = length - 1
     if lower > 0.:
-        idx = round(lower * length)
-        try:
-            min_val = sorted_data[idx]
-        except:
-            pass
-
+        low_idx = min(int(round(lower * length)), length - 1)
     if upper > 0.:
-        idx = round(upper * length)
-        try:
-            max_val = sorted_data[-idx]
-        except:
-            pass
-
-    return min_val, max_val
+        high_idx = max(length - 1 - int(round(upper * length)), 0)
+    if high_idx < low_idx:
+        low_idx = high_idx = (low_idx + high_idx) // 2
+    return sorted_data[low_idx], sorted_data[high_idx]
 
 
 
