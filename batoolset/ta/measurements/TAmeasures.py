@@ -241,86 +241,133 @@ def fill_missing_with_Nones(database):
             v.extend(missing)
     return database
 
+# BLAS/OpenMP thread pools: with one process per core, each process must use a single thread or the cores are
+# oversubscribed (n processes x n threads)
+_THREAD_ENV_VARS = ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS', 'NUMEXPR_NUM_THREADS',
+                    'NUMBA_NUM_THREADS', 'VECLIB_MAXIMUM_THREADS')
+
+
+def _measure_one_file(file, measure_polarity, measure_3D, min_cell_size, bond_cut_off):
+    # top level (picklable for spawn); an error is reported instead of killing the whole pool
+    try:
+        TAMeasurements(file, measure_polarity=measure_polarity, measure_3D=measure_3D, min_cell_size=min_cell_size,
+                       bond_cut_off=bond_cut_off)
+        return file, None
+    except Exception:
+        return file, traceback.format_exc()
+
+
+def _report_measurement_error(file, error):
+    if error:
+        print(error)
+    logger.error('an error occurred while processing file ' + str(file))
+
+
+def _measure_sequentially(files, progress_callback, total, done, **params):
+    for file in files:
+        if early_stop.stop:
+            return
+        try:
+            if progress_callback is not None:
+                progress_callback.emit(int((done / total) * 100))
+            else:
+                print(str((done / total) * 100) + '%')
+        except:
+            pass
+        _, error = _measure_one_file(file, **params)
+        if error:
+            _report_measurement_error(file, error)
+        done += 1
+
+
+# starting the worker processes costs ~20 s on Windows (every child imports the measurement modules), a few images
+# are measured faster sequentially
+MIN_FILES_FOR_PARALLEL_MEASUREMENTS = 8
+
+
+def measurement_worker_count(nb_files, max_workers=None):
+    """
+    Number of processes used to measure nb_files images: cores - 1 (or max_workers), never more than the number of
+    images, 1 (sequential) for small batches unless max_workers is set. 1 means sequential.
+    """
+    import multiprocessing
+    if max_workers is None and nb_files < MIN_FILES_FOR_PARALLEL_MEASUREMENTS:
+        return 1
+    workers = max_workers if max_workers is not None else multiprocessing.cpu_count() - 1
+    return max(1, min(workers, nb_files))
+
+
+def _measure_in_parallel(files, workers, progress_callback, **params):
+    """
+    Measures the files in 'spawn' worker processes (portable Windows/macOS/Linux: no fork after Qt/TensorFlow, the
+    worker module and pyTA's main module are import-light so the children never import TensorFlow, jobs are plain
+    file paths).
+    Stop button: queued images are cancelled, running ones finish (never kill a process that writes a DB).
+    If the pool breaks (e.g. a crashed child), the images not yet measured are measured sequentially.
+    """
+    import gc
+    import multiprocessing
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+    # python copies the parent memory to the children --> clean it up first
+    gc.collect()
+    print('using', workers, 'processes')
+    remaining = list(files)
+    saved_env = {k: os.environ.get(k) for k in _THREAD_ENV_VARS}
+    try:
+        executor = ProcessPoolExecutor(max_workers=workers, mp_context=multiprocessing.get_context('spawn'))
+    except Exception:
+        traceback.print_exc()
+        _measure_sequentially(remaining, progress_callback, len(files), 0, **params)
+        return
+    try:
+        # the children inherit the environment when they are spawned (at the first submit)
+        for k in _THREAD_ENV_VARS:
+            os.environ[k] = '1'
+        try:
+            futures = {executor.submit(_measure_one_file, file, **params): file for file in files}
+        finally:
+            for k, v in saved_env.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+        for future in as_completed(futures):
+            file, error = future.result()
+            remaining.remove(futures[future])
+            if error:
+                _report_measurement_error(file, error)
+            if progress_callback is not None:
+                progress_callback.emit(int(((len(files) - len(remaining)) / len(files)) * 100))
+            if early_stop.stop:
+                executor.shutdown(wait=True, cancel_futures=True)
+                return
+    except Exception:
+        # BrokenProcessPool or any other pool failure
+        traceback.print_exc()
+        logger.error('parallel measurements failed, measuring the remaining images sequentially')
+        executor.shutdown(wait=True, cancel_futures=True)
+        _measure_sequentially(remaining, progress_callback, len(files), len(files) - len(remaining), **params)
+    finally:
+        executor.shutdown(wait=True)
+
+
 def TAMeasurements(file_or_list, __forced_orig=None, __forced_cells=None, __forced_heightmap=None,
                    measure_polarity=False, measure_3D=False, min_cell_size=10, progress_callback=None,
-                   bond_cut_off=2, multi_threading=True):  # if less or equal to 2 --> is not a bond but is a vertex
+                   bond_cut_off=2, multi_threading=True, max_workers=None):  # if less or equal to 2 --> is not a bond but is a vertex
 
     # print('file_or_list', type(file_or_list))
     # we MT the whole stuff because it's fairly easy to do so
     if isinstance(file_or_list, list):
         start = timer()
-        if multi_threading:
-            from tqdm import tqdm
-            from functools import partial
-            import sys
-            import multiprocessing
-            import gc
-            # given that python copies all the content of the memory for multiprocessing, it's probably a good idea to clean it up
-            gc.collect()
-            # import platform
-            #
-            # if platform.system() == "Darwin":
-            #     multiprocessing.set_start_method('spawn')
-
-            nb_procs = multiprocessing.cpu_count()-1
-            if nb_procs<=0:
-                nb_procs = 1
-            print('using',nb_procs, 'processors')
-
-            # Portability fix (Windows/macOS/Linux): use an explicit *spawn* context
-            # instead of the OS-default Pool.  spawn workers start from a clean
-            # interpreter, so there is no fork-after-Qt/TensorFlow abort on macOS,
-            # and (because this worker module and pyta's main module are import-light)
-            # they never re-import TensorFlow.  Those two things were what made the
-            # earlier bare-Pool version crash / hang on macOS.  Jobs are plain file
-            # paths and the worker (TAMeasurements) is a top-level function, so both
-            # pickle cleanly for spawn.
-            ctx = multiprocessing.get_context('spawn')
-            with ctx.Pool(processes=nb_procs) as pool:
-                process = partial(TAMeasurements, measure_polarity=measure_polarity, measure_3D=measure_3D,
-                               min_cell_size=min_cell_size, bond_cut_off=bond_cut_off)
-                for i, _ in enumerate(tqdm(pool.imap_unordered(process, file_or_list), total=len(file_or_list))):
-                # for i, _ in enumerate(tqdm(pool.map(process, file_or_list), total=len(file_or_list))): # does not work with threadpool executor I am doing smthg wrong ???
-                    # pass
-                    # sys.stderr.write('\rdone {0:%}'.format(i / len(merge_names))) # --> I could use that to plot with the other progressbar --> ok
-                    # cool --> I can use that to display progress in the other progress bar --> the QT one
-                    # pass
-                    if early_stop.stop:
-                        # for multiprocpool
-                        pool.close()
-                        pool.join()
-                        return
-                    if progress_callback is not None:
-                        progress_callback.emit(int((i / len(file_or_list)) * 100))
-
-                # not sure I should put the lines below...
-                # https://stackoverflow.com/questions/38271547/when-should-we-call-multiprocessing-pool-join --> maybe still a good idea to keep that
-                # for multiprocpool
-                pool.close()
-                pool.join()
-                print('total time', timer() - start)
-            return
+        params = dict(measure_polarity=measure_polarity, measure_3D=measure_3D, min_cell_size=min_cell_size,
+                      bond_cut_off=bond_cut_off)
+        workers = measurement_worker_count(len(file_or_list), max_workers) if multi_threading else 1
+        if workers > 1:
+            _measure_in_parallel(file_or_list, workers, progress_callback, **params)
         else:
-            for iii, file in enumerate(file_or_list):
-                try:
-                    if early_stop.stop:
-                        return
-                    if progress_callback is not None:
-                        progress_callback.emit(int((iii / len(file_or_list)) * 100))
-                    else:
-                        print(str((iii / len(file_or_list)) * 100) + '%')
-                except:
-                    pass
-                try:
-                    TAMeasurements(file, measure_polarity=measure_polarity, measure_3D=measure_3D,
-                                   min_cell_size=min_cell_size, bond_cut_off=bond_cut_off)
-                except:
-                    if __DEBUG__:
-                        print('an error occurred while processing file ' + str(file))
-                    traceback.print_exc()
-                    logger.error('an error occurred while processing file ' + str(file))
-            print('total time', timer() - start)
-            return
+            _measure_sequentially(file_or_list, progress_callback, len(file_or_list), 0, **params)
+        print('total time', timer() - start)
+        return
 
     start = timer()
 
