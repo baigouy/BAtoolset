@@ -1280,7 +1280,7 @@ def get_type(value):
         >>> get_type(True)
         'BOOLEAN'
     """
-    if isinstance(value, bool):
+    if isinstance(value, (bool, np.bool_)):
         return 'BOOLEAN'
     if isinstance(value, str):
         return 'TEXT'
@@ -1290,10 +1290,11 @@ def get_type(value):
         return 'FLOAT'
     if isinstance(value, list):
         return 'TEXT'
-    if isinstance(value, np.int64) or isinstance(value, np.uint64) \
-            or isinstance(value, np.int32) or isinstance(value, np.uint32) \
-            or isinstance(value, np.int8) or isinstance(value, np.uint8):
+    # all numpy integer/float scalars (incl. np.uintc/np.intc, distinct from np.uint32/np.int32 on Windows)
+    if isinstance(value, np.integer):
         return 'INTEGER'
+    if isinstance(value, np.floating):
+        return 'FLOAT'
     if isinstance(value, Img):
         return 'INTEGER'
     if isinstance(value, tuple) or isinstance(value, np.ndarray):
