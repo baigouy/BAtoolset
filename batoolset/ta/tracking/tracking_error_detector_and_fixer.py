@@ -2649,8 +2649,67 @@ def help_user_correct_errors_custom(files, channel=None, progress_callback=None,
                 Img(mask, dimensions='hw').save(mask_save[i])
 
 
+def get_cells_and_their_neighbors_dict_fast(track, bg_color=0xFFFFFF):
+    """
+    Same dict (same content and order) as
+    associate_cells_to_neighbors_ID_in_dict(np.unique(np.asarray(associate_cell_to_its_neighbors2(membrane pixels, track)), axis=0))
+    but vectorized.
+    """
+    vertices = np.stack(np.where(track == bg_color), axis=1)
+    return associate_cells_to_neighbors_ID_in_dict(
+        associate_cell_to_its_neighbors_fast(vertices, track, bg_color=bg_color))
+
+
+def neighbor_score_image(cells_and_their_neighbors_cur, cells_and_their_neighbors_t_other, track_t_cur):
+    """
+    Same image as the score_plotting_image filled by compute_neighbor_score (each cell painted with its neighbour
+    score, 0 elsewhere) but painted in one pass with a lookup table instead of one full image comparison per cell.
+    """
+    scores = {}
+    compute_neighbor_score(cells_and_their_neighbors_cur, cells_and_their_neighbors_t_other, None, scores)
+    ids, inverse = np.unique(track_t_cur, return_inverse=True)
+    values = np.asarray([float(scores.get(cell, 0)) for cell in ids], dtype=float)
+    return values[inverse].reshape(track_t_cur.shape)
+
+
+class _ErrorCorrectionFrameCache:
+    """
+    Tracks, cell neighbours and original images of the last frames: each frame is shown three times (as t+1, t and
+    t-1) and none of these change while the user edits the masks, so they are computed only once.
+    """
+
+    def __init__(self, channel=None, max_size=4):
+        self.channel = channel
+        self.max_size = max_size
+        self.frames = {}
+
+    def get(self, file):
+        if file not in self.frames:
+            track = RGB_to_int24(
+                Img(smart_name_parser(file, ordered_output=['TA', 'tracked_cells_resized.tif'])[1]))
+            original = Img(file)
+            if self.channel is not None and len(original.shape) > 2:
+                original = original[..., self.channel]
+            self.frames[file] = (track, get_cells_and_their_neighbors_dict_fast(track), original)
+            while len(self.frames) > self.max_size:
+                del self.frames[next(iter(self.frames))]
+        return self.frames[file]
+
+
+def _load_mask_for_correction(file):
+    # always reread from disk: the user may have edited and saved it in the previous dialog
+    path = smart_name_parser(file, ordered_output=['TA', 'handCorrection.tif'])[1]
+    mask = Img(path)
+    if len(mask.shape) == 3:
+        mask = mask[..., 0]
+    return path, mask
+
+
 # TODO
 def help_user_correct_errors(files, channel=None, progress_callback=None, auto_contrast_for_all=False):
+    last_scroll_position = None
+    last_scale = None
+    cache = _ErrorCorrectionFrameCache(channel=channel)
     for iii in range(len(files)):
         try:
             if early_stop.stop:
@@ -2682,56 +2741,19 @@ def help_user_correct_errors(files, channel=None, progress_callback=None, auto_c
             # think about it
             continue
 
-        # for file_to_read in files_to_read:
-        extension = '.tif'  # '.png' # '.tif' # '.png' # '.tif'
-        TA_path_minus_1, track_t_minus_1 = smart_name_parser(files_to_read[0],
-                                                             ordered_output=['TA', 'tracked_cells_resized' + extension])
-        TA_path_cur, track_t_cur = smart_name_parser(files_to_read[1],
-                                                     ordered_output=['TA', 'tracked_cells_resized' + extension])
-        TA_path_plus_1, track_t_plus_1 = smart_name_parser(files_to_read[2],
-                                                           ordered_output=['TA', 'tracked_cells_resized' + extension])
-
-        # print(tracked_cells_resized)
-        track_t_minus_1 = RGB_to_int24(Img(track_t_minus_1))
-        track_t_cur = RGB_to_int24(Img(track_t_cur))
-        track_t_plus_1 = RGB_to_int24(Img(track_t_plus_1))
-
-
-        # show masks too
-        _, handCorrection_t_minus_1 = smart_name_parser(files_to_read[0],
-                                                             ordered_output=['TA', 'handCorrection.tif'])
-        _, handCorrection_t_cur = smart_name_parser(files_to_read[1],
-                                                     ordered_output=['TA', 'handCorrection.tif'])
-        _, handCorrection_t_plus_1 = smart_name_parser(files_to_read[2],
-                                                           ordered_output=['TA', 'handCorrection.tif'])
-
-        TA_path_handCorrection_t_minus_1 =handCorrection_t_minus_1
-        TA_path_handCorrection_t_cur=handCorrection_t_cur
-        TA_path_handCorrection_t_plus_1=handCorrection_t_plus_1
+        # tracks, neighbours and originals are computed once per frame (cached), masks are always reread
+        track_t_minus_1, cells_and_their_neighbors_minus_1, original_t_minus_1 = cache.get(files_to_read[0])
+        track_t_cur, cells_and_their_neighbors_cur, original_t_cur = cache.get(files_to_read[1])
+        track_t_plus_1, cells_and_their_neighbors_plus_1, original_t_plus_1 = cache.get(files_to_read[2])
+        # the viewer may modify the images it is given (e.g. contrast) --> give it copies of the cached ones
+        original_t_minus_1 = original_t_minus_1.copy()
+        original_t_cur = original_t_cur.copy()
+        original_t_plus_1 = original_t_plus_1.copy()
 
         # TODO really do the mask à la TA
-        handCorrection_t_minus_1 = Img(handCorrection_t_minus_1)
-        handCorrection_t_cur = Img(handCorrection_t_cur)
-        handCorrection_t_plus_1 = Img(handCorrection_t_plus_1)
-        if len(handCorrection_t_minus_1.shape)==3:
-            handCorrection_t_minus_1=handCorrection_t_minus_1[...,0]
-        if len(handCorrection_t_cur.shape)==3:
-            handCorrection_t_cur=handCorrection_t_cur[...,0]
-        if len(handCorrection_t_plus_1.shape)==3:
-            handCorrection_t_plus_1=handCorrection_t_plus_1[...,0]
-
-        original_t_minus_1 = Img(files_to_read[0])
-        original_t_cur = Img(files_to_read[1])
-        original_t_plus_1 = Img(files_to_read[2])
-
-        if channel is not None:
-            # we reensure image has channel otherwise skip
-            if len(original_t_minus_1.shape) > 2:
-                original_t_minus_1=original_t_minus_1[...,channel]
-            if len(original_t_cur.shape) > 2:
-                original_t_cur=original_t_cur[...,channel]
-            if len(original_t_plus_1.shape) > 2:
-                original_t_plus_1=original_t_plus_1[...,channel]
+        TA_path_handCorrection_t_minus_1, handCorrection_t_minus_1 = _load_mask_for_correction(files_to_read[0])
+        TA_path_handCorrection_t_cur, handCorrection_t_cur = _load_mask_for_correction(files_to_read[1])
+        TA_path_handCorrection_t_plus_1, handCorrection_t_plus_1 = _load_mask_for_correction(files_to_read[2])
 
 
         # find_vertices(img)
@@ -2740,9 +2762,6 @@ def help_user_correct_errors(files, channel=None, progress_callback=None, auto_c
         # vertices_t_minus_1 = find_vertices(track_t_minus_1, return_vertices=True, return_bonds=False)
         # vertices_t_cur = find_vertices(track_t_cur, return_vertices=True, return_bonds=False)
         # vertices_t_plus_1 = find_vertices(track_t_plus_1, return_vertices=True, return_bonds=False)
-        vertices_t_minus_1 = np.stack(np.where(track_t_minus_1 == 0xFFFFFF),axis=1)  # find_vertices(track_t_minus_1, return_vertices=True, return_bonds=False)
-        vertices_t_cur = np.stack(np.where(track_t_cur == 0xFFFFFF),axis=1)  # find_vertices(track_t_cur, return_vertices=True, return_bonds=False)
-        vertices_t_plus_1 = np.stack(np.where(track_t_plus_1 == 0xFFFFFF),axis=1)  # find_vertices(track_t_plus_1, return_vertices=True, return_bonds=False)
 
         # plt.imshow(vertices)
         # plt.show()
@@ -2758,34 +2777,15 @@ def help_user_correct_errors(files, channel=None, progress_callback=None, auto_c
         # print()  # a bit faster indeed but not outstanding
 
         # get cells and their neigbs for -1 and 0 and do a scoring --> will highlight potential swapping and or division and or other things in a way --> REALLY TRY THAT
-        cells_and_their_neighbors_minus_1 = np.unique(
-            np.asarray(associate_cell_to_its_neighbors2(vertices_t_minus_1, track_t_minus_1)), axis=0)
-        cells_and_their_neighbors_cur = np.unique(
-            np.asarray(associate_cell_to_its_neighbors2(vertices_t_cur, track_t_cur)), axis=0)
-        cells_and_their_neighbors_plus_1 = np.unique(
-            np.asarray(associate_cell_to_its_neighbors2(vertices_t_plus_1, track_t_plus_1)), axis=0)
-
-        cells_and_their_neighbors_minus_1 = associate_cells_to_neighbors_ID_in_dict(cells_and_their_neighbors_minus_1)
-        cells_and_their_neighbors_cur = associate_cells_to_neighbors_ID_in_dict(cells_and_their_neighbors_cur)
-        cells_and_their_neighbors_plus_1 = associate_cells_to_neighbors_ID_in_dict(cells_and_their_neighbors_plus_1)
-
-        # print('cells_and_their_neighbors_minus_1', cells_and_their_neighbors_minus_1)
-        # print('cells_and_their_neighbors_cur', cells_and_their_neighbors_cur)
-        # print('cells_and_their_neighbors_plus_1', cells_and_their_neighbors_plus_1)
+        # (the neighbours come from the cache, see get_cells_and_their_neighbors_dict_fast)
 
         # for all the common cells --> compute a score
         # nb of matching neighbs / total nb of neighbs in both
 
         # create and color
-
-        cells_present_in_t_cur_but_absent_in_t_plus_1 = []
-        cells_present_in_t_cur_but_absent_in_t_plus_1_score = {}
-        matching_neighorhood_score_t_cur_with_t_plus_1 = np.zeros_like(track_t_cur, dtype=float)
-
-        compute_neighbor_score(cells_and_their_neighbors_cur, cells_and_their_neighbors_plus_1,
-                               cells_present_in_t_cur_but_absent_in_t_plus_1,
-                               cells_present_in_t_cur_but_absent_in_t_plus_1_score,
-                               matching_neighorhood_score_t_cur_with_t_plus_1, track_t_cur)
+        matching_neighorhood_score_t_cur_with_t_plus_1 = neighbor_score_image(cells_and_their_neighbors_cur,
+                                                                              cells_and_their_neighbors_plus_1,
+                                                                              track_t_cur)
 
         # for cell, neigbs in cells_and_their_neighbors_cur.items():
         #     if cell in cells_and_their_neighbors_plus_1:
@@ -2798,14 +2798,9 @@ def help_user_correct_errors(files, channel=None, progress_callback=None, auto_c
         #         cells_present_in_t_cur_but_absent_in_t_plus_1.append(cell)
         #         cells_present_in_t_cur_but_absent_in_t_plus_1_score[cell] = 0
 
-        cells_present_in_t_cur_but_absent_in_t_minus_1 = []
-        cells_present_in_t_cur_but_absent_in_t_minus_1_score = {}
-        matching_neighorhood_score_t_cur_with_t_minus_1 = np.zeros_like(track_t_cur, dtype=float)
-
-        compute_neighbor_score(cells_and_their_neighbors_cur, cells_and_their_neighbors_minus_1,
-                               cells_present_in_t_cur_but_absent_in_t_minus_1,
-                               cells_present_in_t_cur_but_absent_in_t_minus_1_score,
-                               matching_neighorhood_score_t_cur_with_t_minus_1, track_t_cur)
+        matching_neighorhood_score_t_cur_with_t_minus_1 = neighbor_score_image(cells_and_their_neighbors_cur,
+                                                                               cells_and_their_neighbors_minus_1,
+                                                                               track_t_cur)
         # for cell, neigbs in cells_and_their_neighbors_cur.items():
         #     if cell in cells_and_their_neighbors_minus_1:
         #         # compute score and color cell
@@ -3120,7 +3115,8 @@ def help_user_correct_errors(files, channel=None, progress_callback=None, auto_c
         # plt.imshow(apply_lut(matching_neighorhood_score_t_cur_with_t_minus_1,PaletteCreator().create3(PaletteCreator.DNA),convert_to_RGB=True))
         # plt.show()
         # do the mask overlap à la TA
-        augment, ok = ImgDisplayWindow.display(draw_mode='pen', nb_rows=3, nb_cols=3, images=[
+        # display returns 4 values (it used to return 2) --> also keeps zoom and scroll position from frame to frame
+        augment, last_scroll_position, last_scale, ok = ImgDisplayWindow.display(draw_mode='pen', nb_rows=3, nb_cols=3, images=[
             # handCorrection_t_minus_1,
             #                                                                           handCorrection_t_cur,
             #                                                                           handCorre««««ction_t_plus_1,
@@ -3143,7 +3139,8 @@ def help_user_correct_errors(files, channel=None, progress_callback=None, auto_c
                                                        # 'matching_neighorhood_score_t_cur_with_t_minus_1', None, 'matching_neighorhood_score_t_cur_with_t_plus_1'],
                                                        'score t-1/current', None, 'score t+1/current'],
                                                # score current image _t_cur_with_t_minus_1
-                                               synced=True, lst=files, cur_frame_idx=iii, auto_contrast_for_all=auto_contrast_for_all)
+                                               synced=True, lst=files, cur_frame_idx=iii, auto_contrast_for_all=auto_contrast_for_all,
+                                               last_scroll_position=last_scroll_position, last_scale=last_scale)
 
         # for the first three painters save their mask to the mask of TA --> TODO
         # PaletteCreator().create3(PaletteCreator.DNA)
