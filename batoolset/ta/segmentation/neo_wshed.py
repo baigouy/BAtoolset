@@ -58,13 +58,14 @@ def wshed(img, channel=None, weak_blur=None, strong_blur=None, seeds='mask', min
     if is_white_bg:
         img = invert(img)
 
+    # mode='reflect': 'wrap' mixed the opposite image edges, creating false membranes along the borders
     strong = None
     if weak_blur:
-        weak = filters.gaussian(img, sigma=weak_blur, preserve_range=True, mode='wrap')
+        weak = filters.gaussian(img, sigma=weak_blur, preserve_range=True, mode='reflect')
     else:
         weak = img
     if strong_blur:
-        strong = filters.gaussian(img, sigma=strong_blur, preserve_range=True, mode='wrap')
+        strong = filters.gaussian(img, sigma=strong_blur, preserve_range=True, mode='reflect')
 
     if __DEBUG__:
         print('blur ' + str(timer() - start) + ' s')

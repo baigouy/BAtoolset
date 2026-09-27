@@ -382,6 +382,7 @@ def track_cells_dynamic_tissue(path, channel=None, PYRAMIDAL_DEPTH=3, MAX_ITER=1
         # print('neighbs found', cells_and_their_neighbors_minus_1[10287288])
 
         initial_score = -1
+        corrected_track = track_t_cur  # saved as is if the swap correction stops at its first iteration (no gain)
 
         # it's better but there are still some swapping --> need be fixed
         for lll in range(MAX_ITER):
