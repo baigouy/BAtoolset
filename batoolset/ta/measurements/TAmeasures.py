@@ -165,11 +165,15 @@ def get_sum_and_avg_intensity(original_image, reg, idx=None, y_shift_to_transfor
         ys = final_reg[:, 0]
         xs = final_reg[:, 1]
 
-    sum_bd_intensity = np.sum(original_image[
+    # plain ndarray: a reduction of an Img returns a 0-d Img that cannot be stored in the database (single channel
+    # images had no bonds_2D table)
+    sum_bd_intensity = np.sum(np.asarray(original_image)[
                                   ys + y_shift_to_transform_local_coords_to_global_coords,
                                   xs + x_shift_to_transform_local_coords_to_global_coords],
                               axis=axis)
     avg_bd_intensity = sum_bd_intensity / float(len(xs))
+    if axis is None:
+        return sum_bd_intensity.item(), avg_bd_intensity.item()
 
     return sum_bd_intensity, avg_bd_intensity
 
