@@ -32,7 +32,7 @@ from batoolset.tools.early_stopper_class import early_stop
 from batoolset.ta.database.sql import TAsql
 from batoolset.ta.tracking.bonds_and_vertices import membrane_contacts
 from batoolset.ta.tracking.bond_kymographs import order_bond_pixels
-from batoolset.ta.tracking.clones import load_clone
+from batoolset.ta.tracking.clones import load_clone, save_subclone_ids
 from batoolset.ta.tracking.divisions_and_deaths import load_tracks
 from batoolset.tools.logger import TA_logger
 
@@ -309,10 +309,11 @@ def _progress(progress_callback, value):
         progress_callback.emit(int(value))
 
 
-def compute_clone_roughness(lst, clone_nb=0, scale=20., progress_callback=None):
+def compute_clone_roughness(lst, clone_nb=0, scale=20., store_subclone_ids=False, progress_callback=None):
     """
     Clone roughness of every piece of the clone outline in every frame, saved in clone_roughness_XXX.csv next to the
-    images.
+    images. With store_subclone_ids, the sub-clone ID of every clone cell is also saved in the 'local_clone_id_XXX'
+    table of pyTA.db (as the TissueAnalyzer option).
 
     Returns:
         list: rows (frame_nb, filename, piece, closed, center_x, center_y, points, chord_length, mean_arc_length)
@@ -322,6 +323,8 @@ def compute_clone_roughness(lst, clone_nb=0, scale=20., progress_callback=None):
         if early_stop.stop:
             break
         _progress(progress_callback, i / len(lst) * 100)
+        if store_subclone_ids:
+            save_subclone_ids(filename, clone_nb)
         pieces = _frame_interface(filename, clone_nb)
         if not pieces:
             continue

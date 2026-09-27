@@ -16,6 +16,8 @@ Tools:
     - detect_clone: cells whose area is covered above a fraction by pixels brighter than a threshold in a channel
       (e.g. a clone marker), independently in every frame
     - invert_clone, combine_clones (and/or/xor/minus)
+    - store_subclone_ids: ID of the connected patch (sub-clone) of every clone cell, per frame, in the
+      'local_clone_id_XXX' table (TissueAnalyzer 'store local clone ID in DB' option of the clone roughness)
 Clone roughness, boundary roughness and wiggliness are in clone_shape.py.
 """
 import os
@@ -24,7 +26,7 @@ from batoolset.files.tools import smart_name_parser
 from batoolset.img import Img, int24_to_RGB, RGB_to_int24
 from batoolset.tools.early_stopper_class import early_stop
 from batoolset.ta.database.sql import TAsql
-from batoolset.ta.tracking.bonds_and_vertices import load_divisions
+from batoolset.ta.tracking.bonds_and_vertices import load_divisions, get_bond_pixels
 from batoolset.ta.tracking.divisions_and_deaths import load_tracks
 from batoolset.tools.logger import TA_logger
 
@@ -182,6 +184,85 @@ def load_clone(filename, clone_nb, tracks=None):
     if tracks is None:
         return None
     return {int(t) for t in np.unique(tracks[clone == CLONE_COLOR])} - {MEMBRANE, BACKGROUND}
+
+
+def subclones(tracks, cells_in_clone):
+    """
+    Splits a clone into sub-clones: groups of clone cells connected through shared bonds (cells touching only by a
+    vertex are not connected). Sub-clones are numbered from 1, by decreasing number of cells (ties: top-most first).
+
+    Returns:
+        dict: track ID -> sub-clone ID
+    """
+    cells = sorted(int(c) for c in cells_in_clone)
+    root = {c: c for c in cells}
+
+    def find(c):
+        while root[c] != c:
+            root[c] = root[root[c]]
+            c = root[c]
+        return c
+
+    for a, b in get_bond_pixels(tracks):
+        if a in root and b in root:
+            root[find(a)] = find(b)
+    groups = {}
+    for c in cells:
+        groups.setdefault(find(c), []).append(c)
+    ys, xs = np.nonzero(np.isin(tracks, cells))
+    top = {}
+    for t, y in zip(tracks[ys, xs].tolist(), ys.tolist()):
+        if t not in top or y < top[t]:
+            top[t] = y
+    order = sorted(groups.values(), key=lambda g: (-len(g), min(top.get(c, 0) for c in g), g[0]))
+    return {c: i + 1 for i, g in enumerate(order) for c in g}
+
+
+def subclone_table_name(clone_nb):
+    """TissueAnalyzer name of the sub-clone table."""
+    return 'local_clone_id_%03d' % clone_nb
+
+
+def save_subclone_ids(filename, clone_nb=0, tracks=None):
+    """
+    Saves the sub-clone ID of every cell of the clone in the 'local_clone_id_XXX' table of pyTA.db (TissueAnalyzer
+    columns: local_id_cells, local_clone_id).
+
+    Returns:
+        dict: track ID -> sub-clone ID (None if the clone or the tracks do not exist)
+    """
+    tracks = load_tracks(filename) if tracks is None else tracks
+    if tracks is None:
+        return None
+    cells_in_clone = load_clone(filename, clone_nb, tracks)
+    if cells_in_clone is None:
+        logger.error('Clone ' + str(clone_nb) + ' does not exist for ' + str(filename))
+        return None
+    ids = subclones(tracks, cells_in_clone)
+    track_to_local = _local_ids(filename, tracks)
+    if not track_to_local:
+        logger.error('No cell_tracks table for ' + str(filename) + ', please track cells first')
+        return ids
+    rows = sorted((track_to_local[t], s) for t, s in ids.items() if t in track_to_local)
+    db = TAsql(filename_or_connection=smart_name_parser(filename, ordered_output='pyTA.db'))
+    try:
+        name = subclone_table_name(clone_nb)
+        db.drop_table(name)
+        if rows:
+            db.create_and_append_table(name, {'local_id_cells': [r[0] for r in rows],
+                                              'local_clone_id': [r[1] for r in rows]})
+    finally:
+        db.close()
+    return ids
+
+
+def store_subclone_ids(lst, clone_nb=0, progress_callback=None):
+    """save_subclone_ids for every frame."""
+    for i, filename in enumerate(lst):
+        if early_stop.stop:
+            break
+        _progress(progress_callback, i / len(lst) * 100)
+        save_subclone_ids(filename, clone_nb)
 
 
 def _progress(progress_callback, value):
