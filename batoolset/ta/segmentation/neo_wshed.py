@@ -107,15 +107,15 @@ def wshed(img, channel=None, weak_blur=None, strong_blur=None, seeds='mask', min
 
     labels_ws = watershed(weak, markers=markers, watershed_line=True)
     del weak
-    del markers
 
     if fix_scipy_wshed:
         labels_ws = full_numba_wshed_fixer(labels_ws)
 
     tmp = np.zeros_like(labels_ws)
     tmp[labels_ws == 0] = 255
-    labels_ws = tmp
+    labels_ws = _drop_cells_without_seed(tmp, markers != 0)
     del tmp
+    del markers
 
     if __DEBUG__:
         print('wshed 1 ' + str(timer() - start) + ' s')
@@ -135,10 +135,12 @@ def wshed(img, channel=None, weak_blur=None, strong_blur=None, seeds='mask', min
                 wshed_mask[label == cell] = 255
             del label
 
+            seeds_2nd_pass = wshed_mask == 0
             wshed_mask = watershed(wshed_mask, markers=None, watershed_line=True)
             final_mask = np.zeros_like(wshed_mask)
             final_mask[wshed_mask == 0] = 255
             del wshed_mask
+            final_mask = _drop_cells_without_seed(final_mask, seeds_2nd_pass)
     else:
         final_mask = labels_ws
 
@@ -151,6 +153,28 @@ def wshed(img, channel=None, weak_blur=None, strong_blur=None, seeds='mask', min
         print('final wshed ' + str(timer() - start) + ' s')
 
     return final_mask
+
+def _drop_cells_without_seed(mask, seeds):
+    """
+    Turns into membrane (255) the cells of a 0/255 watershed mask that contain no seed pixel. The watershed line only
+    separates the basins in 8-connectivity: at a 4-way vertex the crossing pixel belongs to a basin it touches only by
+    a corner, and label(connectivity=1) turns it into a 1 px cell.
+
+    Args:
+        mask (numpy.ndarray): 0 = cells, 255 = membranes.
+        seeds (numpy.ndarray): boolean, True on the seed (marker) pixels of the watershed.
+
+    Returns:
+        numpy.ndarray: the corrected mask (same dtype).
+    """
+    cells = measure.label(mask == 0, connectivity=1, background=0)
+    seeded = np.zeros(cells.max() + 1, dtype=bool)
+    seeded[np.unique(cells[seeds & (cells != 0)])] = True
+    seeded[0] = True
+    out = np.array(mask, copy=True)
+    out[~seeded[cells]] = 255
+    return out
+
 
 def _is_label_image(img):
     """True for an image of integer cell IDs (more than 2 values, e.g. cells.tif), False for a binary mask."""

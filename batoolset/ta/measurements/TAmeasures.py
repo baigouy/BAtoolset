@@ -178,6 +178,63 @@ def get_sum_and_avg_intensity(original_image, reg, idx=None, y_shift_to_transfor
     return sum_bd_intensity, avg_bd_intensity
 
 
+def append_per_channel(table, prefix, values, nb_channels):
+    """
+    Appends one value per channel to the columns prefix + 'ch0', prefix + 'ch1', ... of a table whose 'local_ID' of
+    the current row has already been appended. Columns are created on first use and padded with None for the earlier
+    rows so that all columns stay aligned.
+
+    Args:
+        table (dict): column name -> list of values.
+        prefix (str): column name without the channel number (e.g. 'sum_px_int_cytoplasm_ch').
+        values (scalar, sequence or None): one value per channel (a scalar for single channel images), None for a
+            missing value.
+        nb_channels (int): number of channels of the image.
+    """
+    row = len(table['local_ID']) - 1
+    for ccc in range(nb_channels):
+        key = prefix + str(ccc)
+        if key not in table:
+            table[key] = [None] * row
+        if values is None:
+            val = None
+        elif np.ndim(values) == 0:
+            val = values
+        else:
+            val = values[ccc]
+        if isinstance(val, np.generic):
+            val = val.item()
+        table[key].append(val)
+
+
+def get_intensity_weighted_centroid(original_image, ys, xs):
+    """
+    Returns the intensity weighted centroid of a set of pixels, for every channel.
+
+    Args:
+        original_image (numpy.ndarray): 2D (single channel) or 2D + channel image.
+        ys (numpy.ndarray): y coordinates of the pixels.
+        xs (numpy.ndarray): x coordinates of the pixels.
+
+    Returns:
+        tuple: (y_centroids, x_centroids), one value per channel (None for a channel that is 0 over all the pixels).
+    """
+    weights = np.asarray(original_image)[ys, xs].astype(np.float64)
+    if weights.ndim == 1:
+        weights = weights[:, None]
+    total = weights.sum(axis=0)
+    y_centroids = []
+    x_centroids = []
+    for ccc in range(weights.shape[1]):
+        if total[ccc] == 0:
+            y_centroids.append(None)
+            x_centroids.append(None)
+        else:
+            y_centroids.append(float(np.dot(weights[:, ccc], ys) / total[ccc]))
+            x_centroids.append(float(np.dot(weights[:, ccc], xs) / total[ccc]))
+    return y_centroids, x_centroids
+
+
 def get_orientation(first_vertex, second_vertex):
     """
     Computes the orientation (in degrees) between two vertices.
@@ -411,8 +468,8 @@ def TAMeasurements(file_or_list, __forced_orig=None, __forced_cells=None, __forc
     cells_2D = {'local_ID': [],
                 'cytoplasmic_area': [],
                 'area': [],
-                # 'major_axis_length': [],
-                # 'minor_axis_length': [],
+                'major_axis_length': [],  # of the cytoplasm (ellipse with the same second moments)
+                'minor_axis_length': [],
                 'orientation': [],
                 'elongation': [],
                 'S1': [],
@@ -479,6 +536,7 @@ def TAMeasurements(file_or_list, __forced_orig=None, __forced_cells=None, __forc
         original_image = Img(file_or_list)
         TA_path = smart_name_parser(file_or_list, ordered_output='full_no_ext')
         db_path = os.path.join(TA_path, 'pyTA.db')
+    nb_channels = original_image.shape[-1] if len(original_image.shape) >= 3 else 1
 
     # if this path is None then debug --> display the image otherwise save it then save stuff
 
@@ -1194,6 +1252,11 @@ def TAMeasurements(file_or_list, __forced_orig=None, __forced_cells=None, __forc
             bonds_2D['sum_px_int_vertices_included_ch' + str(0)].append(sum_bd_intensity)
             bonds_2D['avg_px_int_vertices_included_ch' + str(0)].append(avg_bd_intensity)
 
+        # the labelled bond has no vertex pixels (they were removed from the bond image before labelling)
+        sum_bd_intensity_no_vx, avg_bd_intensity_no_vx = get_sum_and_avg_intensity(original_image, bond)
+        append_per_channel(bonds_2D, 'sum_px_int_vertices_excluded_ch', sum_bd_intensity_no_vx, nb_channels)
+        append_per_channel(bonds_2D, 'avg_px_int_vertices_excluded_ch', avg_bd_intensity_no_vx, nb_channels)
+
         if measure_3D and height_map is not None:
             bonds_3D['length3D'].append(bd_length3D)
         #
@@ -1393,6 +1456,9 @@ def TAMeasurements(file_or_list, __forced_orig=None, __forced_cells=None, __forc
                         bonds_2D['avg_px_int_vertices_included_ch' + str(0)] = []
                     bonds_2D['sum_px_int_vertices_included_ch' + str(0)].append(sum_bd_intensity)
                     bonds_2D['avg_px_int_vertices_included_ch' + str(0)].append(avg_bd_intensity)
+                # this bond is made of two touching vertices only: it has no pixel once vertices are excluded
+                append_per_channel(bonds_2D, 'sum_px_int_vertices_excluded_ch', None, nb_channels)
+                append_per_channel(bonds_2D, 'avg_px_int_vertices_excluded_ch', None, nb_channels)
 
                     # not so hard to do I guess because I have id and bond id
 
@@ -1926,6 +1992,21 @@ def TAMeasurements(file_or_list, __forced_orig=None, __forced_cells=None, __forc
         cells_2D['perimeter'].append(reg[idx].perimeter)# nb maybe this value is incorrect because it's an apporximation --> probably I should replace it even if it will be much slower
         cells_2D['perimeter_pixel_count'].append(reg[idx].area)
         cells_2D['area'].append(cell.area + reg[idx].perimeter / 2.)  # NB should I do that in 3D too???
+        cells_2D['major_axis_length'].append(float(cell.axis_major_length))
+        cells_2D['minor_axis_length'].append(float(cell.axis_minor_length))
+
+        # intensities per channel: cytoplasm = the cell pixels, perimeter = the membrane pixels around the cell
+        sum_int, avg_int = get_sum_and_avg_intensity(original_image, cell)
+        append_per_channel(cells_2D, 'sum_px_int_cytoplasm_ch', sum_int, nb_channels)
+        append_per_channel(cells_2D, 'avg_px_int_cytoplasm_ch', avg_int, nb_channels)
+        sum_int, avg_int = get_sum_and_avg_intensity(original_image, reg, idx,
+                                                     y_shift_to_transfrom_local_coords_to_global_coords,
+                                                     x_shift_to_transfrom_local_coords_to_global_coords)
+        append_per_channel(cells_2D, 'sum_px_int_perimeter_ch', sum_int, nb_channels)
+        append_per_channel(cells_2D, 'avg_px_int_perimeter_ch', avg_int, nb_channels)
+        y_weighted, x_weighted = get_intensity_weighted_centroid(original_image, cell.coords[:, 0], cell.coords[:, 1])
+        append_per_channel(cells_2D, 'y_centroid_int_weighted_ch', y_weighted, nb_channels)
+        append_per_channel(cells_2D, 'x_centroid_int_weighted_ch', x_weighted, nb_channels)
 
         # scipy elongation and orientation of cells --> TODO --> maybe also add the TA one just for compatibility
         # cells_2D['major_axis_length'].append(cell.major_axis_length)
