@@ -10,11 +10,13 @@ queries/exports (NATURAL JOIN with cells_2D).
 
 Tools:
     - track_clone: selected cells (track IDs in one frame) + their progeny (cell_divisions.csv) + their ancestors,
-      followed in all frames
+      followed in all frames; or, as in TissueAnalyzer (whole_lineage), the whole family of the selected cells
+      (sisters, cousins... included)
     - edit_clone: adds/removes cells (by track ID) to an existing clone in all frames
     - detect_clone: cells whose area is covered above a fraction by pixels brighter than a threshold in a channel
       (e.g. a clone marker), independently in every frame
     - invert_clone, combine_clones (and/or/xor/minus)
+Clone roughness, boundary roughness and wiggliness are in clone_shape.py.
 """
 import os
 import numpy as np
@@ -59,7 +61,7 @@ def lineage(lst, divisions=None):
     return parent, birth
 
 
-def clone_membership(selected, selection_frame, parent, birth, nb_frames):
+def clone_membership(selected, selection_frame, parent, birth, nb_frames, whole_lineage=False):
     """
     Returns, for every frame, the set of track IDs in the clone: the selected cells (all frames), their progeny born
     after the selection frame and their ancestors (in the frames before the corresponding division).
@@ -70,8 +72,18 @@ def clone_membership(selected, selection_frame, parent, birth, nb_frames):
         parent (dict): daughter -> mother track (see lineage).
         birth (dict): daughter -> frame of birth.
         nb_frames (int): number of frames.
+        whole_lineage (bool): TissueAnalyzer behaviour: the whole family of the selected cells (their first ancestor
+            in the movie and all its progeny, i.e. also sisters, cousins... of the selected cells).
     """
     selected = set(int(s) for s in selected)
+    if whole_lineage:
+        roots = set()
+        for cell in selected:
+            while cell in parent:
+                cell = parent[cell]
+            roots.add(cell)
+        selected = roots
+        selection_frame = -1  # all the progeny of the roots
     per_frame = [set(selected) for _ in range(nb_frames)]
     # progeny (any generation) born after the selection
     children = {}
@@ -177,7 +189,7 @@ def _progress(progress_callback, value):
         progress_callback.emit(int(value))
 
 
-def track_clone(lst, selected, selection_frame, clone_nb=0, progress_callback=None):
+def track_clone(lst, selected, selection_frame, clone_nb=0, whole_lineage=False, progress_callback=None):
     """
     Creates clone clone_nb from cells selected in one frame (see clone_membership) and saves it in all frames.
 
@@ -185,7 +197,7 @@ def track_clone(lst, selected, selection_frame, clone_nb=0, progress_callback=No
         list: for every frame, the set of track IDs in the clone.
     """
     parent, birth = lineage(lst)
-    per_frame = clone_membership(selected, selection_frame, parent, birth, len(lst))
+    per_frame = clone_membership(selected, selection_frame, parent, birth, len(lst), whole_lineage=whole_lineage)
     for i, filename in enumerate(lst):
         if early_stop.stop:
             break
