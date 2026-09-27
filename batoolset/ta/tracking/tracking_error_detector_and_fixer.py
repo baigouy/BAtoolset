@@ -623,8 +623,10 @@ def apply_color_to_labels(lab_t_cur, map_tracks_n_label_t_cur):
     max_label = int(lab_t_cur.max()) if lab_t_cur.size else 0
     lut = np.zeros(max_label + 1, dtype=lab_t_cur.dtype)
     for k, v in map_tracks_n_label_t_cur:
-        if 0 <= v <= max_label:
-            lut[v] = k
+        # the map can be a float array (static tracker): a label only matches an integral value, as with lab == v
+        label_id = int(v)
+        if label_id == v and 0 <= label_id <= max_label:
+            lut[label_id] = k
     return lut[lab_t_cur]
 
 def map_track_id_to_label(first_pixels_t_cur, track_t_cur, lab_t_cur):

@@ -83,11 +83,18 @@ def get_local_id_n_track_correspondence_from_images(filename):
             return
 
         for region in regionprops(cell_id_image):
-            color = tracked_image[region.coords[0][0], region.coords[0][1]]
-            if color == 0:
+            colors = tracked_image[region.coords[:, 0], region.coords[:, 1]]
+            if (colors == 0).all():
                 logger.warning("Tracks and cells don't match, correspondence will be meaningless, please update your files")
                 return None
-            local_id_track_correspondence[region.label] = color
+            # majority track of the cell pixels (the first pixel alone can be membrane in the tracked image); cells the
+            # tracker drew as membrane (e.g. 1 px slivers at the image border) have no track (NULL)
+            colors = colors[(colors != 0) & (colors != 0xFFFFFF)]
+            if colors.size == 0:
+                local_id_track_correspondence[region.label] = None
+                continue
+            ids, counts = np.unique(colors, return_counts=True)
+            local_id_track_correspondence[region.label] = int(ids[counts.argmax()])
     except:
         traceback.print_exc()
         logger.error('Something went wrong when converting local ID to tracks for file ' + str(filename))

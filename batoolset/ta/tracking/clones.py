@@ -119,19 +119,24 @@ def _clone_image(tracks, cells_in_clone):
     return out
 
 
-def _local_ids(filename, tracks):
-    """track ID -> local cell ID (cell_tracks table written by the tracking)."""
+def _cell_tracks_rows(filename):
+    """(local_id, track_id) rows of the cell_tracks table written by the tracking (track_id None: untracked cell)."""
     db_path = smart_name_parser(filename, ordered_output='pyTA.db')
     if not os.path.isfile(db_path):
-        return {}
+        return []
     db = TAsql(filename_or_connection=db_path)
     try:
         if 'cell_tracks' not in db.get_tables():
-            return {}
+            return []
         rows = db.run_SQL_command_and_get_results('SELECT local_id, track_id FROM cell_tracks')
     finally:
         db.close()
-    return {int(t): int(l) for l, t in rows if t is not None and l is not None}
+    return [(int(l), None if t is None else int(t)) for l, t in rows if l is not None]
+
+
+def _local_ids(filename, tracks):
+    """track ID -> local cell ID (cell_tracks table written by the tracking)."""
+    return {t: l for l, t in _cell_tracks_rows(filename) if t is not None}
 
 
 def save_clone(filename, tracks, cells_in_clone, clone_nb):
@@ -143,9 +148,10 @@ def save_clone(filename, tracks, cells_in_clone, clone_nb):
 
 
 def _save_clone_table(filename, tracks, cells_in_clone, clone_nb):
-    track_to_local = _local_ids(filename, tracks)
-    if not track_to_local:
+    cell_rows = _cell_tracks_rows(filename)
+    if not cell_rows:
         return
+    track_to_local = {t: l for l, t in cell_rows if t is not None}
     db = TAsql(filename_or_connection=smart_name_parser(filename, ordered_output='pyTA.db'))
     try:
         column = clone_column_name(clone_nb)
@@ -159,7 +165,7 @@ def _save_clone_table(filename, tracks, cells_in_clone, clone_nb):
             columns = []
         if column not in columns:
             columns.append(column)
-        table = {'local_id': sorted(track_to_local.values())}
+        table = {'local_id': sorted(l for l, _ in cell_rows)}  # every cell, untracked cells are never in a clone
         in_clone = {track_to_local[t] for t in cells_in_clone if t in track_to_local}
         for col in sorted(columns):
             if col == column:
