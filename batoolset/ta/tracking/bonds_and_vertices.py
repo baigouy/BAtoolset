@@ -30,6 +30,7 @@ from batoolset.files.tools import smart_name_parser
 from batoolset.img import Img, int24_to_RGB
 from batoolset.tools.early_stopper_class import early_stop
 from batoolset.ta.database.sql import TAsql
+from batoolset.ta.database.provenance import record_stage_for_list
 from batoolset.ta.tracking.divisions_and_deaths import load_tracks
 from batoolset.tools.logger import TA_logger
 
@@ -543,4 +544,5 @@ def track_bonds_and_vertices(lst, bonds=True, vertices=True, progress_callback=N
             for row in vertex_rows:
                 f.write('%d,%s,%d,%.2f,%.2f,%s\n' % row)
         logger.info(str(max((max(v.values(), default=0) for v in vertex_ids), default=0)) + ' vertex tracks')
+    record_stage_for_list(lst, 'bonds_and_vertices')
     return bond_infos, vertex_ids

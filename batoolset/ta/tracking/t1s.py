@@ -27,6 +27,7 @@ from batoolset.files.tools import smart_name_parser
 from batoolset.img import Img, int24_to_RGB
 from batoolset.tools.early_stopper_class import early_stop
 from batoolset.ta.database.sql import TAsql
+from batoolset.ta.database.provenance import record_stage_for_list
 from batoolset.ta.tracking.divisions_and_deaths import load_tracks
 from batoolset.ta.tracking.tracking_error_detector_and_fixer import get_cells_and_their_neighbors_dict_fast
 from batoolset.tools.logger import TA_logger
@@ -223,4 +224,5 @@ def detect_T1s(lst, progress_callback=None):
     _write_csv(os.path.join(parent, 'T1s.csv'), lst, t1s)
     _write_csv(os.path.join(parent, 'stable_T1s.csv'), lst, stable)
     logger.info(str(len(t1s)) + ' T1s, ' + str(len(stable)) + ' stable T1s')
+    record_stage_for_list(lst, 'T1s')
     return t1s, stable

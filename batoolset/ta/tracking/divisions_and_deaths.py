@@ -39,6 +39,7 @@ from batoolset.files.tools import smart_name_parser
 from batoolset.img import Img, RGB_to_int24, int24_to_RGB
 from batoolset.tools.early_stopper_class import early_stop
 from batoolset.ta.database.sql import TAsql
+from batoolset.ta.database.provenance import record_stage_for_list
 from batoolset.tools.logger import TA_logger
 
 logger = TA_logger()
@@ -841,6 +842,7 @@ def detect_divisions_and_deaths(lst, detect_divs=True, detect_death=True, min_da
                ['frame_nb', 'filename', 'track_id', 'event', 'class', 'related_track_id', 'area', 'cell_id', 'details'])
     counts = {c: sum(1 for e in events if e['class'] == c) for c in EVENT_CLASSES}
     logger.info(str(len(divisions)) + ' divisions and ' + str(len(deaths)) + ' deaths detected; track events: ' + str(counts))
+    record_stage_for_list(lst, 'divisions_and_deaths')
     progress(100)
     return divisions, deaths
 

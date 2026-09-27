@@ -16,6 +16,7 @@ from batoolset.ta.database.sql import TAsql, get_property
 from batoolset.ta.segmentation.neo_wshed import wshed
 # from batoolset.ta.clones.clone_fuser import distance_between_points
 from batoolset.ta.measurements.nematic_measurements import compute_polarity_nematic
+from batoolset.ta.database.provenance import record_stage
 from batoolset.ta.measurements.measurements3D.get_point_on_surface_if_centroid_is_bad import point_on_surface
 from batoolset.ta.measurements.measurements3D.measures3D import compute_3D_surfacearea, perimeter_3D
 from batoolset.ta.measurements.measurements3D.triangulate import triangulate
@@ -2187,6 +2188,7 @@ def TAMeasurements(file_or_list, __forced_orig=None, __forced_cells=None, __forc
             db.drop_table('bonds_3D')
 
         db.close()
+        record_stage(file_or_list, 'measurements')
     else:
         # plt.imshow(cells)
         # plt.show()

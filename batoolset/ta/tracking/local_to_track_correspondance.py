@@ -5,6 +5,7 @@ from batoolset.img import Img, RGB_to_int24
 from batoolset.tools.early_stopper_class import early_stop
 from batoolset.utils.loadlist import loadlist
 from batoolset.ta.database.sql import TAsql
+from batoolset.ta.database.provenance import record_stage
 import traceback
 import os
 from batoolset.tools.logger import TA_logger # logging
@@ -125,6 +126,8 @@ def add_localID_to_trackID_correspondance_in_DB(lst, progress_callback=None):
             db_file = smart_name_parser(file, ordered_output='pyTA.db')
             local_to_global_correspondence = get_local_id_n_track_correspondence_from_images(file)
             save_local_id_and_track_correspondence(local_to_global_correspondence, db_file)
+            # both trackers end here: the tracks of this image are final
+            record_stage(file, 'tracking')
 
 
 if __name__ == "__main__":
