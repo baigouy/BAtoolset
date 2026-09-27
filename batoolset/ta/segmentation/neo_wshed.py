@@ -51,7 +51,7 @@ def wshed(img, channel=None, weak_blur=None, strong_blur=None, seeds='mask', min
         if isinstance(seeds, str):
             seeds = None
 
-    if channel:
+    if channel is not None:  # 'if channel:' used to ignore channel 0
         if len(img.shape) > 2:
             img = img[..., channel]
 
@@ -70,7 +70,11 @@ def wshed(img, channel=None, weak_blur=None, strong_blur=None, seeds='mask', min
         print('blur ' + str(timer() - start) + ' s')
 
     if isinstance(seeds, str) and seeds == 'mask':
-        markers = measure.label(weak, connectivity=1, background=255)
+        if _is_label_image(weak):
+            # cell IDs instead of a 0/255 mask: label(background=255) would turn cell 255 into membrane
+            weak, markers = _label_image_to_markers(weak)
+        else:
+            markers = measure.label(weak, connectivity=1, background=255)
     elif isinstance(seeds, list):
         marker = np.zeros_like(weak, dtype=np.int32)
         seeds = np.asarray(seeds)
@@ -146,6 +150,36 @@ def wshed(img, channel=None, weak_blur=None, strong_blur=None, seeds='mask', min
         print('final wshed ' + str(timer() - start) + ' s')
 
     return final_mask
+
+def _is_label_image(img):
+    """True for an image of integer cell IDs (more than 2 values, e.g. cells.tif), False for a binary mask."""
+    img = np.asarray(img)
+    if img.ndim != 2 or img.dtype == bool:
+        return False
+    values = np.unique(img)
+    if values.size <= 2:
+        return False
+    return bool(np.all(values == np.round(values)))
+
+
+def _label_image_to_markers(labels):
+    """
+    Watershed input for a label image (0 = membrane/background, or touching cells without membranes): every cell ID is
+    a marker; where two cells touch, the pixel below/right of the contact is left unlabeled so that a 1 px watershed
+    line separates them.
+
+    Returns:
+        tuple: elevation image (1 on unlabeled pixels) and markers
+    """
+    markers = np.asarray(labels).astype(np.int64)
+    touching = np.zeros(markers.shape, bool)
+    vertical = (markers[1:, :] != markers[:-1, :]) & (markers[1:, :] != 0) & (markers[:-1, :] != 0)
+    touching[1:, :] |= vertical  # one side only: 1 px boundaries, tiny cells keep their marker
+    horizontal = (markers[:, 1:] != markers[:, :-1]) & (markers[:, 1:] != 0) & (markers[:, :-1] != 0)
+    touching[:, 1:] |= horizontal
+    markers[touching] = 0
+    return (markers == 0).astype(np.uint8), markers
+
 
 @njit
 def full_numba_wshed_fixer(img):
