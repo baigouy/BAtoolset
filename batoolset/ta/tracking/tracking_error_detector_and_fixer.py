@@ -1359,8 +1359,102 @@ def _pairwise_scores(mat_a, lens_a, mat_b_rows, lens_b_rows):
     return (inter * 2) / (lens_a[:, None] + lens_b_rows[None, :])
 
 
+class LocalMotionSupport:
+    """
+    Geometric evidence for the swap correction: how well a track of the previous image, moved like its surroundings,
+    covers a cell of the current image.
+
+    The local motion of a cell is the median displacement (previous -> current centroid) of the nearest 'confident'
+    cells: cells whose neighbours are exactly the same in both images (neighbour score 1), hence almost certainly well
+    tracked. It does not depend on the registration, so it can correct cells wrongly matched by it.
+
+    support(track_id, label) = fraction of the pixels of the cell 'label' of the current image covered by the track
+    track_id of the previous image moved by the local motion of the cell (0 for a track absent from the previous
+    image).
+    """
+
+    def __init__(self, track_prev, track_cur, lab_cur, cell_scores, nb_neighbors=6, min_confident=3,
+                 prev_centroids=None):
+        from scipy.spatial import cKDTree
+        self.track_prev = track_prev
+        self.lab_cur = lab_cur
+        self.height, self.width = track_prev.shape[:2]
+        prev_ids = prev_centroids if prev_centroids is not None else self.centroids(track_prev)
+        cur_ids = self.centroids(track_cur)
+        confident = [c for c, s in cell_scores.items() if s >= 1. and c in prev_ids and c in cur_ids]
+        self.enabled = len(confident) >= min_confident
+        self._coords = {}
+        self._cache = {}
+        if not self.enabled:
+            return
+        cur_pos = np.array([cur_ids[c] for c in confident])
+        self._displacements = cur_pos - np.array([prev_ids[c] for c in confident])
+        self._tree = cKDTree(cur_pos)
+        self._k = min(nb_neighbors, len(confident))
+
+    def _cell(self, label):
+        """(pixel coords, local motion) of a cell of the current image, computed on demand."""
+        if label not in self._coords:
+            coords = np.argwhere(self.lab_cur == label)
+            motion = None
+            if len(coords):
+                _, idx = self._tree.query(coords.mean(axis=0), k=self._k)
+                motion = np.median(self._displacements[np.atleast_1d(idx)], axis=0)
+            self._coords[label] = (coords, motion)
+        return self._coords[label]
+
+    @staticmethod
+    def centroids(tracks):
+        """{track ID: (y, x) centroid} of an int24 track image (membranes and background excluded)."""
+        flat = tracks.ravel()
+        order = np.argsort(flat, kind='stable')
+        ids, starts = np.unique(flat[order], return_index=True)
+        ys, xs = np.divmod(order, tracks.shape[1])
+        out = {}
+        ends = list(starts[1:]) + [len(order)]
+        for track_id, s, e in zip(ids, starts, ends):
+            if track_id in (0, 0xFFFFFF):
+                continue
+            out[int(track_id)] = (ys[s:e].mean(), xs[s:e].mean())
+        return out
+
+    def support(self, track_id, label):
+        if not self.enabled:
+            return 0.
+        key = (track_id, label)
+        if key not in self._cache:
+            coords, motion = self._cell(label)
+            if motion is None:
+                return 0.
+            dy, dx = np.rint(motion).astype(int)
+            ys = coords[:, 0] - dy
+            xs = coords[:, 1] - dx
+            inside = (ys >= 0) & (ys < self.height) & (xs >= 0) & (xs < self.width)
+            covered = np.count_nonzero(self.track_prev[ys[inside], xs[inside]] == track_id)
+            self._cache[key] = covered / float(len(coords))
+        return self._cache[key]
+
+
+# a change of track IDs is refused when it lowers the summed geometric support of the cells it changes by more than this
+# (0.1: fewest identity switches + merged/lost/unexplained tracks on 3 x 30 frames of a real movie; 0.25 and 0.5 were
+# also better than no check)
+GEOMETRIC_VETO_TOLERANCE = 0.1
+
+
+def _geometrically_worse(geometry, changes):
+    """changes: [(current track ID, proposed track ID, label of the cell)] --> True if the change must be refused."""
+    before = 0.
+    after = 0.
+    for old_id, new_id, label in changes:
+        if label is None:
+            return False
+        before += geometry.support(old_id, label)
+        after += geometry.support(new_id, label)
+    return after < before - GEOMETRIC_VETO_TOLERANCE
+
+
 def optimize_score_fast(cells_and_their_neighbors_cur, cells_and_their_neighbors_t_other, current_cells_n_score,
-                        map_tracks_n_label_t_cur, threshold=0.5):
+                        map_tracks_n_label_t_cur, threshold=0.5, geometry=None):
     """
     Faster drop-in replacement of optimize_score that returns exactly the same results.
 
@@ -1370,6 +1464,10 @@ def optimize_score_fast(cells_and_their_neighbors_cur, cells_and_their_neighbors
     locally instead of deep copying the whole neighbourhood dict.
 
     Args and returns: see optimize_score.
+        geometry (LocalMotionSupport, optional): if given, a change (assignment or swap) is also refused when the cells
+            it changes fit their new track IDs clearly worse than their current ones once the local motion is taken
+            into account (e.g. a newborn daughter taking the ID of a neighbour instead of keeping a new ID). Without
+            it the results are exactly those of optimize_score.
     """
     cur = cells_and_their_neighbors_cur
     other = cells_and_their_neighbors_t_other
@@ -1462,6 +1560,9 @@ def optimize_score_fast(cells_and_their_neighbors_cur, cells_and_their_neighbors
         del possible_assignment[k]
 
     for cell, val in possible_assignment.items():
+        if geometry is not None and _geometrically_worse(
+                geometry, [(cell, val, tmp_map_tracks_n_label_t_cur.get(cell))]):
+            continue
         order = list(cur.keys())
         old = {}
 
@@ -1507,6 +1608,10 @@ def optimize_score_fast(cells_and_their_neighbors_cur, cells_and_their_neighbors
             if final_validated_changes[val] == key:
                 # prevent reswapping an already swapped stuff --> move on
                 continue
+        if geometry is not None and _geometrically_worse(
+                geometry, [(cell, val, tmp_map_tracks_n_label_t_cur.get(cell)),
+                           (val, cell, tmp_map_tracks_n_label_t_cur.get(val))]):
+            continue
         old = {}
 
         def set_value(k, v):

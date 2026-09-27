@@ -48,7 +48,8 @@ __DEBUG__ = False
 # KEEP  for the parameter below if cells are big one can decrease it for some images it does make a big difference!!! --> TODO SET THIS AS A
 from batoolset.ta.tracking.tracking_error_detector_and_fixer import find_vertices, associate_cell_to_its_neighbors2, \
     associate_cells_to_neighbors_ID_in_dict, compute_neighbor_score, optimize_score, get_cells_in_image_n_fisrt_pixel, \
-    map_track_id_to_label, apply_color_to_labels, associate_cell_to_its_neighbors_fast, optimize_score_fast
+    map_track_id_to_label, apply_color_to_labels, associate_cell_to_its_neighbors_fast, optimize_score_fast, \
+    LocalMotionSupport
 
 
 # PYRAMIDAL_DEPTH = 3  # 2 #3 # computing pyramidal translation can be time consuming and the gain vs time cost is not always worth it
@@ -57,7 +58,10 @@ from batoolset.tools.early_stopper_class import early_stop
 # from personal.pyTA.tsts.new_registration_code import criss_cross_reg
 
 
-def track_cells_dynamic_tissue(path, channel=None, PYRAMIDAL_DEPTH=3, MAX_ITER=15, progress_callback=None):
+def track_cells_dynamic_tissue(path, channel=None, PYRAMIDAL_DEPTH=3, MAX_ITER=15, progress_callback=None,
+                               motion_check=True):
+    # motion_check: the swap correction also checks the local motion of the cells (see LocalMotionSupport); it stops
+    # IDs sliding onto newborn daughters and gave fewer identity switches on real movies (2026-09-27)
     start_all = timer()
 
     # PYRAMIDAL_DEPTH = 3  # 2 #3 # computing pyramidal translation can be time consuming and the gain vs time cost is not always worth it
@@ -383,6 +387,7 @@ def track_cells_dynamic_tissue(path, channel=None, PYRAMIDAL_DEPTH=3, MAX_ITER=1
 
         initial_score = -1
         corrected_track = track_t_cur  # saved as is if the swap correction stops at its first iteration (no gain)
+        prev_centroids = None  # of track_t_minus_1, for the motion check
 
         # it's better but there are still some swapping --> need be fixed
         for lll in range(MAX_ITER):
@@ -502,9 +507,17 @@ def track_cells_dynamic_tissue(path, channel=None, PYRAMIDAL_DEPTH=3, MAX_ITER=1
                 # we update both the cells and their local correspondance --> I think I have it --> just need few more crosses to identify more errors
                 # can I use that as a tracking algo on top of the other with a minimization of the stuff and just do the coloring in the end --> TODO
 
+                geometry = None
+                if motion_check:
+                    if prev_centroids is None:
+                        prev_centroids = LocalMotionSupport.centroids(track_t_minus_1)
+                    geometry = LocalMotionSupport(track_t_minus_1, track_t_cur, lab_t_cur,
+                                                  cells_present_in_t_cur_but_absent_in_t_minus_1_score,
+                                                  prev_centroids=prev_centroids)
                 cells_and_their_neighbors_cur, map_tracks_n_label_t_cur, last_score_reached = optimize_score_fast(
                     cells_and_their_neighbors_cur, cells_and_their_neighbors_minus_1,
-                    cells_present_in_t_cur_but_absent_in_t_minus_1_score, map_tracks_n_label_t_cur, threshold=threshold)
+                    cells_present_in_t_cur_but_absent_in_t_minus_1_score, map_tracks_n_label_t_cur, threshold=threshold,
+                    geometry=geometry)
                 # print('map_tracks_n_label_t_cur2',map_tracks_n_label_t_cur2)
                 # print('map_tracks_n_label_t_cur',map_tracks_n_label_t_cur)
 
