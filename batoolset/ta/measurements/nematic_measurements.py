@@ -17,6 +17,9 @@ def compute_polarity_nematic(centroid, boundary_coords, image_to_compute_polarit
     center_x = centroid[1]
     center_y = centroid[0]
 
+    # a boundary point lying on the centroid has no angle (0/0 made the whole nematic NaN)
+    boundary_coords = [pt for pt in boundary_coords if pt[1] != center_x or pt[0] != center_y]
+
     # Compute theta values for each boundary point
     theta_unsorted = []
     for pt in boundary_coords:

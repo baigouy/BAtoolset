@@ -51,18 +51,14 @@ def _compute_stretch_nematic(pointsWithinArea_or_region, normalizeByArea=True):
     center_y, center_x = np.average(pointsWithinArea_or_region, axis=0)
     center = [center_y, center_x]
 
-    S1 = 0.
-    S2 = 0.
-
-    for point in pointsWithinArea_or_region:
-        deltaX = float(point[1]) - center_x
-        deltaY = float(point[0]) - center_y
-        rSquared = deltaX * deltaX + deltaY * deltaY
-        cos2Theta = 2. * deltaX * deltaX / rSquared - 1.
-        sin2Theta = 2. * deltaX * deltaY / rSquared
-
-        S1 += cos2Theta
-        S2 += sin2Theta
+    points = np.asarray(pointsWithinArea_or_region, dtype=np.float64)
+    deltaX = points[:, 1] - center_x
+    deltaY = points[:, 0] - center_y
+    rSquared = deltaX * deltaX + deltaY * deltaY
+    # the pixel lying exactly on the centroid has no angle (0/0 used to make S1 and S2 NaN)
+    ok = rSquared > 0
+    S1 = float(np.sum(2. * deltaX[ok] * deltaX[ok] / rSquared[ok] - 1.))
+    S2 = float(np.sum(2. * deltaX[ok] * deltaY[ok] / rSquared[ok]))
 
     if normalizeByArea:
         S1 /= pointsWithinArea_or_region.shape[0]
