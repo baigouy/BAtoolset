@@ -9,6 +9,7 @@ from timeit import default_timer as timer
 from batoolset.colors.colorgen import get_forbidden_colors_int24
 from batoolset.ta.tracking.local_to_track_correspondance import add_localID_to_trackID_correspondance_in_DB
 from batoolset.ta.tracking.registration import pre_register_images, apply_translation
+from batoolset.ta.tracking.mermaid_registration import load_mermaid_translation_matrix, warp_with_translation_matrix
 from batoolset.files.tools import assign_random_ID_to_missing_cells, get_TA_file, first_image_tracking
 from batoolset.ta.tracking.tracking_error_detector_and_fixer import find_vertices, associate_cell_to_its_neighbors2, \
     associate_cells_to_neighbors_ID_in_dict, compute_neighbor_score, optimize_score, get_cells_in_image_n_fisrt_pixel, \
@@ -65,32 +66,16 @@ def match_by_max_overlap(name_t1, name_t0, channel_of_interest=None, assigned_ID
     # Load the warped and resized cell tracks for the second timepoint
     int_24_warped_track_t0 = RGB_to_int24(Img(os.path.join(os.path.splitext(name_t0)[0], 'tracked_cells_resized.tif')))
 
+    mermaid_map = None
     if warp_using_mermaid_if_map_is_available:
-        try:
-            from personal.mermaid.deep_warping_uing_mermaid_minimal import warp_image_directly_using_phi
-
-            filename0_without_ext = os.path.splitext(name_t0)[0]
-
-            if os.path.exists(os.path.join(filename0_without_ext, 'mermaid_map.tif')):
-                # Warp the cell tracks using Mermaid if the map is available
-                warp_map = Img(os.path.join(filename0_without_ext, 'mermaid_map.tif'))
-                int_24_warped_track_t0 = warp_image_directly_using_phi(int_24_warped_track_t0, warp_map, pre_registration=name_t0 if pre_register else None).astype(np.uint32)
-            else:
-                if pre_register:
-                    # Perform pre-registration if specified
-                    trans_dim_0, trans_dim_1 = _pre_reg(name_t0, name_t1, channel_of_interest)
-                    int_24_warped_track_t0 = apply_translation(int_24_warped_track_t0, -trans_dim_0, -trans_dim_1)
-        except:
-            print("Mermaid registration failed... continuing without")
-            if pre_register:
-                # Perform pre-registration if specified
-                trans_dim_0, trans_dim_1 = _pre_reg(name_t0, name_t1, channel_of_interest)
-                int_24_warped_track_t0 = apply_translation(int_24_warped_track_t0, -trans_dim_0, -trans_dim_1)
-    else:
-        if pre_register:
-            # Perform pre-registration if specified
-            trans_dim_0, trans_dim_1 = _pre_reg(name_t0, name_t1, channel_of_interest)
-            int_24_warped_track_t0 = apply_translation(int_24_warped_track_t0, -trans_dim_0, -trans_dim_1)
+        # non-rigid map computed by mermaid_registration.compute_mermaid_maps (includes the pre-registration)
+        mermaid_map = load_mermaid_translation_matrix(os.path.splitext(name_t0)[0], shape=int_24_warped_track_t0.shape)
+    if mermaid_map is not None:
+        int_24_warped_track_t0 = warp_with_translation_matrix(int_24_warped_track_t0, mermaid_map)
+    elif pre_register:
+        # Perform pre-registration if specified
+        trans_dim_0, trans_dim_1 = _pre_reg(name_t0, name_t1, channel_of_interest)
+        int_24_warped_track_t0 = apply_translation(int_24_warped_track_t0, -trans_dim_0, -trans_dim_1)
 
     # Convert the mask to label image
     if len(mask_t1.shape) == 3:

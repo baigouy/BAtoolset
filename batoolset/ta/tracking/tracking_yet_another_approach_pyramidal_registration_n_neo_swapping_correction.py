@@ -36,6 +36,7 @@ from batoolset.img import Img
 from batoolset.colors.colorgen import get_forbidden_colors_int24
 from batoolset.ta.measurements.measurements3D.get_point_on_surface_if_centroid_is_bad import point_on_surface
 from batoolset.ta.tracking.registration import get_pyramidal_registration
+from batoolset.ta.tracking.mermaid_registration import load_mermaid_translation_matrix
 from batoolset.files.tools import assign_random_ID_to_missing_cells, first_image_tracking, get_list_of_files, \
     get_input_files_and_output_folders, get_TA_file, smart_name_parser
 from skimage.measure import regionprops
@@ -59,9 +60,11 @@ from batoolset.tools.early_stopper_class import early_stop
 
 
 def track_cells_dynamic_tissue(path, channel=None, PYRAMIDAL_DEPTH=3, MAX_ITER=15, progress_callback=None,
-                               motion_check=True):
+                               motion_check=True, use_mermaid_maps_if_available=True):
     # motion_check: the swap correction also checks the local motion of the cells (see LocalMotionSupport); it stops
     # IDs sliding onto newborn daughters and gave fewer identity switches on real movies (2026-09-27)
+    # use_mermaid_maps_if_available: a frame with a mermaid map (non-rigid registration, see mermaid_registration) uses
+    # it instead of the pyramidal registration
     start_all = timer()
 
     # PYRAMIDAL_DEPTH = 3  # 2 #3 # computing pyramidal translation can be time consuming and the gain vs time cost is not always worth it
@@ -134,7 +137,11 @@ def track_cells_dynamic_tissue(path, channel=None, PYRAMIDAL_DEPTH=3, MAX_ITER=1
         # in fact this is really the pyramidal reg that is so slow now --> try speed it up
 
         # reducing depth makes a huge gain of time and the gain is limited --> maybe offer depth as a parameters
-        translation_matrix = get_pyramidal_registration(orig_t0, orig_t1, depth=PYRAMIDAL_DEPTH,threshold_translation=20)  # , threshold_translation=20 , pyramidal_skip=PYRAMIDAL_SKIP
+        translation_matrix = None
+        if use_mermaid_maps_if_available:
+            translation_matrix = load_mermaid_translation_matrix(filename0_without_ext, shape=orig_t0.shape)
+        if translation_matrix is None:
+            translation_matrix = get_pyramidal_registration(orig_t0, orig_t1, depth=PYRAMIDAL_DEPTH,threshold_translation=20)  # , threshold_translation=20 , pyramidal_skip=PYRAMIDAL_SKIP
         # translation_matrix = criss_cross_reg(orig_t0, orig_t1) # , threshold_translation=20 , pyramidal_skip=PYRAMIDAL_SKIP # marche mieux mais pas encore ça --> comment comparer et trouver scores # can I exclude no specific objects from tracking --> so that it is working better
         print('intermediate time after pyramidal registration', timer() - start_loop)
 
