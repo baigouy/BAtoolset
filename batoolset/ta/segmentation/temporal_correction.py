@@ -20,8 +20,10 @@ split where there is no membrane signal (when the frames around are over-segment
 wrongly cut the cell in the frame that was right).
 
 Validated against hand-corrected masks (30 frames of a pupal notum movie segmented automatically, max error duration
-4, 3 rounds): over-segmentations -40 %, 98 % of the merges and ~85 % of the splits right. Errors that persist longer
-than max_error_duration cannot be seen this way.
+4, rounds until nothing is found, 2 x 30 frames): over-segmentations -46 % and -56 %, 99 % of the merges and 38/49
+splits right; tracking links right 89 -> 93 % and 87 -> 94 %, complete tracks 27 -> 51 % and 26 -> 61 %. Rounds 1-3
+bring ~97 % of the merges, 5 rounds ~99 %, later rounds merge 0-2 cells each. Errors that persist longer than
+max_error_duration cannot be seen this way.
 
 The motion of every cell is the median displacement of the nearest cells that keep their track ID between the two
 frames, so the movie must be tracked first. The masks (handCorrection.tif/.png) of the corrected frames are
@@ -663,7 +665,7 @@ def tracks_missing_or_stale(lst):
     return False
 
 
-def correct_segmentation_and_track(lst, track_function, rounds=3, progress_callback=None, **parameters):
+def correct_segmentation_and_track(lst, track_function, rounds=5,progress_callback=None, **parameters):
     """
     Tracks the cells if needed, then alternates correct_segmentation_over_time and tracking (a better tracking gives a
     better motion estimate, and corrected frames reveal the errors of their neighbours) until nothing is corrected or

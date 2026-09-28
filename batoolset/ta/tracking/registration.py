@@ -71,7 +71,8 @@ def _translated_tile(img, y, x, tile_height, tile_width, ty, tx):
     return out
 
 
-def get_pyramidal_registration(orig_t0, orig_t1, depth=2, threshold_translation=20):
+def get_pyramidal_registration(orig_t0, orig_t1, depth=2, threshold_translation=20, halve_threshold=True,
+                               min_valid_fraction=0.75):
     """
     Performs pyramidal registration between two images.
 
@@ -80,6 +81,13 @@ def get_pyramidal_registration(orig_t0, orig_t1, depth=2, threshold_translation=
         orig_t1 (numpy.ndarray): The second image.
         depth (int, optional): The depth of the pyramid. Defaults to 2.
         threshold_translation (float, optional): The threshold for ignoring large translations. Defaults to 20.
+        halve_threshold (bool, optional): the largest correction accepted at pyramid level i is
+            threshold_translation / 2 ** (i + 1) instead of threshold_translation. Small tiles of an epithelium hold
+            a few similar cells, their phase correlation often peaks one cell away: with 20 px at every level, 15 % of
+            the cells of a real movie were registered more than one cell radius away (vs 0.6 % with this option),
+            which made the dynamic tracker slide IDs by one cell over whole regions.
+        min_valid_fraction (float, optional): tiles whose translated source is less than this fraction inside the
+            image are not refined (the zeros outside biased the correlation).
 
     Returns:
         numpy.ndarray: The translation matrix representing the translations for each pixel.
@@ -110,10 +118,20 @@ def get_pyramidal_registration(orig_t0, orig_t1, depth=2, threshold_translation=
             tile_height = block_size
             tile_width = block_size
 
+        threshold = threshold_translation / 2 ** (i + 1) if halve_threshold else threshold_translation
+
         for y in range(0, height, tile_height):
             for x in range(0, width, tile_width):
                 ty = translation_matrix[y, x, 0]
                 tx = translation_matrix[y, x, 1]
+                if min_valid_fraction > 0:
+                    # fraction of the tile whose source pixel (p - t) is inside the image
+                    y_end = min(y + tile_height, height)
+                    x_end = min(x + tile_width, width)
+                    rows = max(0, min(y_end, height + ty) - max(y, ty))
+                    cols = max(0, min(x_end, width + tx) - max(x, tx))
+                    if rows * cols < min_valid_fraction * (y_end - y) * (x_end - x):
+                        continue
                 if orig_t0.ndim == 2 and float(ty).is_integer() and float(tx).is_integer():
                     # phase_cross_correlation shifts are integers --> exact shifted copy of the tile only
                     tile_t0 = _translated_tile(orig_t0, y, x, tile_height, tile_width, ty, tx)
@@ -128,7 +146,7 @@ def get_pyramidal_registration(orig_t0, orig_t1, depth=2, threshold_translation=
                 t0 = -shift[0]
                 t1 = -shift[1]
 
-                if abs(t0) > threshold_translation or abs(t1) > threshold_translation:
+                if abs(t0) > threshold or abs(t1) > threshold:
                     continue
 
                 translation_matrix[y:y + tile_height, x:x + tile_width, 0] += t0
