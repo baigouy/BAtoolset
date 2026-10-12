@@ -301,7 +301,7 @@ def get_2D_tiles_with_overlap(inp, width=512, height=512, overlap=0, overlap_x=N
                 end = inp.shape[dimension_h]
             cuts_y.append((begin, end))
             last_idx = idx
-        if end < inp.shape[dimension_h] - 1:
+        if end < inp.shape[dimension_h]:
             begin = last_idx
             end = inp.shape[dimension_h]
             if begin < 0:
@@ -319,6 +319,9 @@ def get_2D_tiles_with_overlap(inp, width=512, height=512, overlap=0, overlap_x=N
         del bigger
         cuts_y.append((0, inp.shape[dimension_h]))
     else:
+        # exactly one tile (height + overlap_y == image height): no overlap to trim at reassembly
+        height += overlap_y
+        overlap_y = 0
         cuts_y.append((0, inp.shape[dimension_h]))
 
     last_idx = 0
@@ -333,7 +336,7 @@ def get_2D_tiles_with_overlap(inp, width=512, height=512, overlap=0, overlap_x=N
                 end = inp.shape[dimension_w]
             cuts_x.append((begin, end))
             last_idx = idx
-        if end < inp.shape[dimension_w] - 1:
+        if end < inp.shape[dimension_w]:
             begin = last_idx
             end = inp.shape[dimension_w]
             if begin < 0:
@@ -351,27 +354,36 @@ def get_2D_tiles_with_overlap(inp, width=512, height=512, overlap=0, overlap_x=N
         del bigger
         cuts_x.append((0, inp.shape[dimension_w]))
     else:
+        # exactly one tile (width + overlap_x == image width): no overlap to trim at reassembly
+        width += overlap_x
+        overlap_x = 0
         cuts_x.append((0, inp.shape[dimension_w]))
+
+    img_height = inp.shape[dimension_h]
+    img_width = inp.shape[dimension_w]
+    # plain 2D images (dimension_h == 0): the last row/column of tiles is shifted back so that it ends at the
+    # image edge and is full size (real pixels instead of padding); shift_y/shift_x (how far back the last tile
+    # starts) are stored in crop_params so that reassemble_tiles puts it back in place
+    shift_last_tile = dimension_h == 0 and width + overlap_x <= img_width and height + overlap_y <= img_height
+    shift_y = 0
+    shift_x = 0
+    if shift_last_tile:
+        shift_y = cuts_y[-1][0] - (img_height - (height + overlap_y))
+        shift_x = cuts_x[-1][0] - (img_width - (width + overlap_x))
 
     nb_tiles = 0
     final_splits = []
     for x_begin, x_end in cuts_x:
         cols = []
         for y_begin, y_end in cuts_y:
-            if (y_end == inp.shape[0] or x_end == inp.shape[1]) and (width + overlap_x <= inp.shape[1] and height + overlap_y <= inp.shape[0]):
-                if dimension_h == 2:
-                    cur_slice = inp[:, :, y_end - (height + overlap_y):y_end, x_end - (width + overlap_x):x_end]
-                elif dimension_h == 1:
-                    cur_slice = inp[:, y_end - (height + overlap_y):y_end, x_end - (width + overlap_x):x_end]
-                elif dimension_h == 0:
-                    cur_slice = inp[y_end - (height + overlap_y):y_end, x_end - (width + overlap_x):x_end]
+            slicer = [slice(None)] * len(inp.shape)
+            if shift_last_tile and (y_end == img_height or x_end == img_width):
+                slicer[dimension_h] = slice(y_end - (height + overlap_y), y_end)
+                slicer[dimension_w] = slice(x_end - (width + overlap_x), x_end)
             else:
-                if dimension_h == 2:
-                    cur_slice = inp[:, :, y_begin:y_end, x_begin:x_end]
-                elif dimension_h == 1:
-                    cur_slice = inp[:, y_begin:y_end, x_begin:x_end]
-                elif dimension_h == 0:
-                    cur_slice = inp[y_begin:y_end, x_begin:x_end]
+                slicer[dimension_h] = slice(y_begin, y_end)
+                slicer[dimension_w] = slice(x_begin, x_end)
+            cur_slice = inp[tuple(slicer)]
             nb_tiles += 1
 
             if not force_to_size:
@@ -397,7 +409,7 @@ def get_2D_tiles_with_overlap(inp, width=512, height=512, overlap=0, overlap_x=N
 
     crop_params = {'overlap_y': overlap_y, 'overlap_x': overlap_x, 'final_height': final_height,
                    'final_width': final_width, 'n_cols': len(final_splits[0]), 'n_rows': len(final_splits),
-                   'nb_tiles': nb_tiles}
+                   'nb_tiles': nb_tiles, 'shift_y': shift_y, 'shift_x': shift_x}
 
     return crop_params, final_splits
 
@@ -618,6 +630,9 @@ def reassemble_tiles(tiles, crop_parameters, three_d=False):
     overlap_x = crop_parameters['overlap_x']
     final_height = crop_parameters['final_height']
     final_width = crop_parameters['final_width']
+    # last tile shifted back to end at the image edge (plain 2D tiling), 0 otherwise
+    shift_y = crop_parameters.get('shift_y', 0)
+    shift_x = crop_parameters.get('shift_x', 0)
 
     cols = []
     for i in range(len(tiles)):
@@ -630,10 +645,7 @@ def reassemble_tiles(tiles, crop_parameters, three_d=False):
                 else:
                     y_slice = slice(None, None)
             elif j == len(tiles[0]) - 1:
-                if overlap_y != 0:
-                    y_slice = slice(int(overlap_y / 2), None)
-                else:
-                    y_slice = slice(None, None)
+                y_slice = slice(int(overlap_y / 2) + shift_y, None)
             else:
                 if overlap_y != 0:
                     y_slice = slice(int(overlap_y / 2), -int(overlap_y / 2))
@@ -662,10 +674,7 @@ def reassemble_tiles(tiles, crop_parameters, three_d=False):
             else:
                 x_slice = slice(None, None)
         elif i == len(cols) - 1:
-            if overlap_x != 0:
-                x_slice = slice(int(overlap_x / 2), None)
-            else:
-                x_slice = slice(None, None)
+            x_slice = slice(int(overlap_x / 2) + shift_x, None)
         else:
             if overlap_x != 0:
                 x_slice = slice(int(overlap_x / 2), -int(overlap_x / 2))
@@ -3888,6 +3897,9 @@ def is_forbidden_image_file(path):
 IMAGE_FILE_EXTS = (
     '.tif', '.tiff', '.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tga', '.svg',
     '.lsm', '.lif', '.czi', '.nd2', '.ims', '.oib', '.oif', '.zvi', '.dv',
+    # more Bio-Formats microscopy formats (read through the Fiji reader)
+    '.vsi', '.stk', '.ics', '.ids', '.oir', '.ndpi', '.svs', '.scn', '.mrc', '.r3d',
+    '.lei', '.sld', '.btf',
 ) + VIDEO_EXTS
 
 
@@ -3930,28 +3942,132 @@ def is_video_file(path):
     return isinstance(path, str) and path.lower().endswith(VIDEO_EXTS)
 
 
-def read_video(path):
-    """Decode a video file into a (T, H, W, C) uint8 stack (xy-t) plus metadata.
+# Two portable decoders/encoders, both pip wheels that bundle ffmpeg (Windows,
+# macOS, Linux — no system ffmpeg needed): OpenCV (opencv-python) and PyAV
+# (`pip install av`, which also brings the H.264 encoder). Neither is a hard
+# dependency; video_backends() says what is there.
+_VIDEO_INSTALL_HINT = "install PyAV (pip install av) — it bundles ffmpeg"
 
-    Colour videos give (T, H, W, 3) in RGB order; genuinely grayscale videos
-    collapse to (T, H, W). Returns (metadata, ndarray) — same contract as the
-    other ImageReader branches, with fps stored in metadata['fps']."""
+
+def video_backends():
+    """{'cv2': bool, 'av': bool, 'h264': bool} — which video libraries can be
+    imported, and whether an H.264 encoder (videos that play everywhere,
+    including QuickTime / Safari / PowerPoint on a Mac) is available."""
+    out = {'cv2': False, 'av': False, 'h264': False}
+    try:
+        import cv2  # noqa: F401
+        out['cv2'] = True
+    except Exception:
+        pass
+    try:
+        import av
+        out['av'] = True
+        out['h264'] = 'libx264' in av.codecs_available or 'h264_mf' in av.codecs_available \
+            or 'h264_videotoolbox' in av.codecs_available
+    except Exception:
+        pass
+    return out
+
+
+def _video_memory_budget():
+    """Bytes a decoded video may take: a quarter of the free RAM, at most 4 GB."""
+    budget = 4 * 1024 ** 3
+    try:
+        import psutil
+        budget = min(budget, int(psutil.virtual_memory().available * 0.25))
+    except Exception:
+        pass
+    return max(budget, 64 * 1024 ** 2)
+
+
+def _frame_step(n_frames, h, w, max_bytes):
+    """Keep every k-th frame so the decoded stack fits in *max_bytes*."""
+    if not n_frames or not h or not w:
+        return 1
+    est = float(n_frames) * h * w * 3
+    return max(1, int(np.ceil(est / max_bytes)))
+
+
+def _read_video_cv2(path, max_bytes):
     import cv2
     cap = cv2.VideoCapture(path)
     if not cap.isOpened():
         raise IOError('could not open video file ' + str(path))
     fps = cap.get(cv2.CAP_PROP_FPS)
+    step = _frame_step(int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0),
+                       int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0),
+                       int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0), max_bytes)
     frames = []
+    i = 0
+    # sequential read only: cap.set() seeks are wrong on duplicate-frame videos
     while True:
-        ok, frame = cap.read()
+        ok = cap.grab()
         if not ok:
             break
-        if frame.ndim == 3 and frame.shape[2] == 3:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        frames.append(frame)
+        if i % step == 0:
+            ok, frame = cap.retrieve()
+            if not ok:
+                break
+            if frame.ndim == 3 and frame.shape[2] == 3:
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frames.append(frame)
+        i += 1
     cap.release()
+    return frames, fps, step
+
+
+def _read_video_av(path, max_bytes):
+    import av
+    container = av.open(path)
+    try:
+        stream = container.streams.video[0]
+        stream.thread_type = 'AUTO'
+        rate = stream.average_rate or stream.guessed_rate
+        fps = float(rate) if rate else None
+        step = _frame_step(stream.frames, stream.codec_context.height,
+                           stream.codec_context.width, max_bytes)
+        frames = []
+        for i, frame in enumerate(container.decode(stream)):
+            if i % step == 0:
+                frames.append(frame.to_ndarray(format='rgb24'))
+    finally:
+        container.close()
+    return frames, fps, step
+
+
+def read_video(path, max_bytes=None):
+    """Decode a video file into a (T, H, W, C) uint8 stack (xy-t) plus metadata.
+
+    Colour videos give (T, H, W, 3) in RGB order; genuinely grayscale videos
+    collapse to (T, H, W). Returns (metadata, ndarray) — same contract as the
+    other ImageReader branches, with fps stored in metadata['fps'].
+
+    Decoded with OpenCV, or PyAV when OpenCV is missing or can't read the file.
+    A movie too big for memory (*max_bytes*, default a quarter of the free RAM,
+    at most 4 GB) keeps every k-th frame: metadata['frame_step'] = k and the fps
+    is divided by k, so time stamps stay right."""
+    if max_bytes is None:
+        max_bytes = _video_memory_budget()
+    have = video_backends()
+    if not have['cv2'] and not have['av']:
+        raise IOError('cannot read the video ' + str(path) + ': ' + _VIDEO_INSTALL_HINT)
+    frames, fps, step, errors = [], None, 1, []
+    for name, reader in (('cv2', _read_video_cv2), ('av', _read_video_av)):
+        if not have[name]:
+            continue
+        try:
+            frames, fps, step = reader(path, max_bytes)
+        except Exception as e:
+            errors.append(f'{name}: {e}')
+            frames = []
+        if frames:
+            break
     if not frames:
-        raise IOError('no frames could be decoded from ' + str(path))
+        hint = '' if have['av'] else ' (' + _VIDEO_INSTALL_HINT + ' to read more formats)'
+        raise IOError('no frames could be decoded from ' + str(path) + hint
+                      + ('; ' + '; '.join(errors) if errors else ''))
+    if step > 1:
+        logger.warning('%s is too long to hold in memory: keeping 1 frame in %d' % (path, step))
 
     image = np.stack(frames, axis=0)  # (T,H,W,C) or (T,H,W)
 
@@ -3971,7 +4087,8 @@ def read_video(path):
                 'dimensions': dims, 'LUTs': None, 'times': None,
                 'Overlays': None, 'ROI': None, 'timelapse': None,
                 'creation_time': None,
-                'fps': fps if (fps and fps > 0) else None}
+                'fps': fps / step if (fps and fps > 0) else None,
+                'frame_step': step}
     return metadata, image
 
 
@@ -3983,15 +4100,82 @@ def _video_fourcc_for(path):
     return cv2.VideoWriter_fourcc(*'mp4v')       # mp4 / mkv / mov / m4v / webm container
 
 
-def write_video(array, path, fps=25.0, dimensions=None, max_width=3840):
+def _av_codec_for(path):
+    """The PyAV encoder for *path*, or None (then OpenCV writes it): H.264 for
+    mp4 / mov / m4v / mkv (plays everywhere), VP9 for webm; avi stays MJPG."""
+    lower = path.lower()
+    try:
+        import av
+    except Exception:
+        return None
+    if lower.endswith('.webm'):
+        return 'libvpx-vp9' if 'libvpx-vp9' in av.codecs_available else None
+    if lower.endswith(('.mp4', '.mov', '.m4v', '.mkv')):
+        for c in ('libx264', 'h264_videotoolbox', 'h264_mf'):
+            if c in av.codecs_available:
+                try:
+                    av.CodecContext.create(c, 'w')
+                    return c
+                except Exception:
+                    continue
+    return None
+
+
+def _write_video_av(arr, path, fps, codec, crf):
+    """Encode (frames, H, W[, C]) uint8 with PyAV: yuv420p (what players expect),
+    so odd sizes are padded by one edge pixel."""
+    import av
+    from fractions import Fraction
+    n, h, w = arr.shape[0], arr.shape[1], arr.shape[2]
+    pad_h, pad_w = h % 2, w % 2
+    rate = Fraction(float(fps) if fps else 25.0).limit_denominator(1001)
+    options = {'movflags': 'faststart'} if path.lower().endswith(('.mp4', '.mov', '.m4v')) else {}
+    container = av.open(path, mode='w', options=options)
+    try:
+        stream = container.add_stream(codec, rate=rate)
+        stream.width = w + pad_w
+        stream.height = h + pad_h
+        stream.pix_fmt = 'yuv420p'
+        # one encoder thread: x264's worker threads crashed the process at
+        # exit ~1 run in 15 when a Qt window had rendered the frames
+        if codec == 'libx264':
+            stream.options = {'crf': str(crf), 'preset': 'medium', 'threads': '1'}
+        elif codec == 'libvpx-vp9':
+            stream.options = {'crf': str(min(63, crf + 14)), 'b': '0', 'threads': '1'}
+        else:
+            stream.bit_rate = int(8 * (w * h) * float(rate) / 10)
+        for i in range(n):
+            frame = arr[i]
+            if frame.ndim == 2:
+                frame = np.repeat(frame[..., None], 3, axis=-1)
+            elif frame.shape[-1] == 1:
+                frame = np.repeat(frame, 3, axis=-1)
+            elif frame.shape[-1] > 3:
+                frame = frame[..., :3]
+            if pad_h or pad_w:
+                frame = np.pad(frame, ((0, pad_h), (0, pad_w), (0, 0)), mode='edge')
+            vf = av.VideoFrame.from_ndarray(np.ascontiguousarray(frame), format='rgb24')
+            for packet in stream.encode(vf):
+                container.mux(packet)
+        for packet in stream.encode():
+            container.mux(packet)
+    finally:
+        container.close()
+    return path
+
+
+def write_video(array, path, fps=25.0, dimensions=None, max_width=3840, crf=17):
     """Write a time-stack (or z-stack) numpy array to a video file.
 
     *array* axes must resolve to (frames, H, W) or (frames, H, W, C). When the
     array carries a dimension string (via *dimensions* or Img metadata) the frame
     axis is taken from 't' if present, otherwise 'd'; any further extra axes are
     reduced by taking their first index. Non-uint8 data is min/max normalized.
-    Width is capped at *max_width* (mp4 decoder limit — see project notes)."""
-    import cv2
+    Width is capped at *max_width* (mp4 decoder limit — see project notes).
+
+    With PyAV installed, mp4 / mov / m4v / mkv are H.264 (quality *crf*, lower is
+    better) and webm is VP9 — they play everywhere; otherwise OpenCV writes the
+    old MPEG-4 codec (avi is always MJPG)."""
     arr = np.asarray(array)
 
     if dimensions is None:
@@ -4023,6 +4207,16 @@ def write_video(array, path, fps=25.0, dimensions=None, max_width=3840):
         logger.warning('video width %d exceeds %d px; players may fail to open it' % (w, max_width))
 
     _create_dir(path)
+    codec = _av_codec_for(path)
+    if codec:
+        return _write_video_av(arr, path, fps, codec, crf)
+    if path.lower().endswith(('.mp4', '.mov', '.m4v')):
+        logger.warning('writing %s with the old MPEG-4 codec (no H.264 encoder found): it may '
+                       'not play on a Mac or in a browser; %s' % (path, _VIDEO_INSTALL_HINT))
+    try:
+        import cv2
+    except ImportError:
+        raise IOError('cannot write the video ' + str(path) + ': ' + _VIDEO_INSTALL_HINT)
     writer = cv2.VideoWriter(path, _video_fourcc_for(path), float(fps) if fps else 25.0, (w, h), is_color)
     if not writer.isOpened():
         raise IOError('could not open video writer for ' + str(path))
@@ -4720,6 +4914,7 @@ class Img(np.ndarray):  # subclass ndarray
         if output_name is None:
             logger.error("No output name specified... ignoring...")
             return
+        output_name = os.fspath(output_name)  # accept pathlib.Path too
 
         # videos out: write the time-stack (or z-stack) as a movie file
         if is_video_file(output_name):

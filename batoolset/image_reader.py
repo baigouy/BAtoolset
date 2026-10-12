@@ -79,20 +79,19 @@ class ImageReader:
             pass
 
         if _ij_reader_available and isinstance(f, str) and not f.lower().endswith(_IJ_EXCLUDED_EXTS):
+            _ij_locked = False
             try:
                 # print('opening image with IJ')
-                # lazy-init ij gateway (only once per process)
+                # process-wide gateway: init_ij() is an idempotent, locked
+                # singleton (raises if a previous init failed)
                 import batoolset.IJ.ij_reader as _ij_reader
-                if getattr(_ij_reader, '_ij_gateway', None) is False:
-                    raise RuntimeError('Fiji init previously failed; skipping')
-                if not hasattr(_ij_reader, '_ij_gateway') or _ij_reader._ij_gateway is None:
-                    try:
-                        _ij_reader._ij_gateway = _ij_reader.init_ij()
-                    except Exception:
-                        _ij_reader._ij_gateway = False  # prevent future retries
-                        raise
-                _ij = _ij_reader._ij_gateway
+                _ij = _ij_reader.init_ij()
 
+                # Bio-Formats/ImageJ reads (open + Java->numpy conversion) are
+                # serialised: the progressive loader reads on a background thread
+                # while the GUI may read at the same time. Released in `finally`.
+                _ij_reader.ij_lock.acquire()
+                _ij_locked = True
                 imp = list_and_open_series(f, series_index=serie_to_open if serie_to_open is not None else 0)
 
                 if imp is not None:
@@ -173,6 +172,9 @@ class ImageReader:
             except Exception:
                 traceback.print_exc()
                 logger.warning('ij_reader failed for ' + str(f) + ' → falling back to default reader')
+            finally:
+                if _ij_locked:
+                    _ij_reader.ij_lock.release()
 
         # small hack to allow for opening web hosted images (e.g. from https://samples.fiji.sc/)
         if isinstance(f, str):

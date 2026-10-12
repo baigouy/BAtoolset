@@ -34,8 +34,14 @@ import os
 import traceback
 
 
+import threading as _threading
+
 # at module level in ij_reader.py (add after imports)
-_ij_gateway = None  # lazy singleton — set on first call from ImageReader
+_ij_gateway = None  # lazy singleton: None = not yet, False = init failed, else the gateway
+# Guards gateway creation AND every Bio-Formats read: init_ij() is called from a
+# startup thread while images may already be loading on a background loader
+# thread, and imagej.init() must never run twice / concurrently in one process.
+ij_lock = _threading.RLock()
 
 # module-level callback — GUI can set this before first image open
 _on_fiji_init_callback = None  # callable() or None
@@ -194,8 +200,7 @@ def init_ij_threaded(parent_widget=None, on_done=None, on_error=None):
                 if on_error:
                     on_error(result['error'])
             else:
-                global _ij_gateway
-                _ij_gateway = result['ij']
+                # init_ij() has already stored the gateway singleton
                 if on_done:
                     on_done(result['ij'])
         else:
@@ -310,6 +315,27 @@ def _use_conda_java():
 
 
 def init_ij(parent_widget=None):
+    """Return the process-wide ImageJ gateway, initialising Fiji on first call.
+
+    Idempotent and thread-safe: later/concurrent callers get the same gateway
+    (previously the gateway returned at startup was discarded, so the first
+    image read initialised Fiji a second time). Raises if a previous init
+    failed."""
+    global _ij_gateway
+    with ij_lock:
+        if _ij_gateway is False:
+            raise RuntimeError('Fiji init previously failed; skipping')
+        if _ij_gateway is not None:
+            return _ij_gateway
+        try:
+            _ij_gateway = _init_ij_unlocked(parent_widget)
+        except Exception:
+            _ij_gateway = False  # prevent endless retries
+            raise
+        return _ij_gateway
+
+
+def _init_ij_unlocked(parent_widget=None):
     _cleanup_duplicate_jgo_fiji_envs()
     _use_conda_java()
     silence_java_logging()
@@ -604,14 +630,15 @@ def _parse_series(filepath):
     n       : int              Number of series in the file.
     names   : list[str]        Human-readable label for each series.
     """
-    silence_bioformats_logging()
-    J = _java_imports()
-    opts = J['ImporterOptions']()
-    opts.setId(filepath)
-    process = J['ImportProcess'](opts)
-    process.execute()
-    n = process.getSeriesCount()
-    names = [process.getSeriesLabel(i) for i in range(n)]
+    with ij_lock:  # re-entrant: callers may already hold it
+        silence_bioformats_logging()
+        J = _java_imports()
+        opts = J['ImporterOptions']()
+        opts.setId(filepath)
+        process = J['ImportProcess'](opts)
+        process.execute()
+        n = process.getSeriesCount()
+        names = [process.getSeriesLabel(i) for i in range(n)]
     return opts, process, n, names
 
 def _open_from_opts(opts, series_index, n):
@@ -632,16 +659,17 @@ def _open_from_opts(opts, series_index, n):
     -------
     imp : ImagePlus
     """
-    J = _java_imports()
-    for i in range(n):
-        opts.setSeriesOn(i, i == series_index)
-    process2 = J['ImportProcess'](opts)
-    process2.execute()
-    reader = J['ImagePlusReader'](process2)
-    imps = reader.openImagePlus()
-    if imps is None or len(imps) == 0:
-        return J['IJ'].openImage(opts.getId())
-    return imps[0]
+    with ij_lock:  # re-entrant: callers may already hold it
+        J = _java_imports()
+        for i in range(n):
+            opts.setSeriesOn(i, i == series_index)
+        process2 = J['ImportProcess'](opts)
+        process2.execute()
+        reader = J['ImagePlusReader'](process2)
+        imps = reader.openImagePlus()
+        if imps is None or len(imps) == 0:
+            return J['IJ'].openImage(opts.getId())
+        return imps[0]
 
 
 def count_series(filepath):
