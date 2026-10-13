@@ -1059,12 +1059,19 @@ def consolidate_files2(save_folder, files_to_consolidate, consolidated_files):
     for file_path, new_path in zip(files_to_consolidate, consolidated_files):
         print(file_path, '->', new_path)
 
+        if file_path == new_path or (isinstance(file_path, str)
+                                     and file_path.lower().startswith(('http://', 'https://'))):
+            continue    # remote source (kept as a URL) or nothing to copy
         try:
             folder_save = smart_name_parser(new_path, 'parent')
             os.makedirs(folder_save, exist_ok=True)
             # print('success',success)
             # print(folder_save)
-            shutil.copy2(file_path, new_path)
+            if os.path.isdir(file_path):
+                # a directory-based image (local .zarr store)
+                shutil.copytree(file_path, new_path, dirs_exist_ok=True)
+            else:
+                shutil.copy2(file_path, new_path)
 
             # print(os.path.exists(new_path)) # this is supposed to exist but I
             # print(new_path)
@@ -1218,6 +1225,11 @@ def smartly_consolidate_files_to_reduce_dupes(full_list_of_filenames_to_consolid
             final_version_of_consolidated_files.append(consolidated_files[idx])
         else:
             print(idx, elm.filename,'not found')
+    # remote sources (http/https, e.g. OME-Zarr on a server) cannot be bundled:
+    # they keep pointing at their URL
+    final_version_of_consolidated_files = [
+        src if isinstance(src, str) and src.lower().startswith(('http://', 'https://')) else dst
+        for src, dst in zip(full_list_of_filenames_to_consolidate, final_version_of_consolidated_files)]
     return full_list_of_filenames_to_consolidate,final_version_of_consolidated_files
 
 

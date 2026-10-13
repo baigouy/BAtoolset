@@ -67,6 +67,18 @@ class ImageReader:
         if is_video_file(f):
             return read_video(f)
 
+        # OME-Zarr (local or http/https URL): one pyramid level, real pixel sizes.
+        # A plain (non-OME) local zarr store falls through to the generic reader below.
+        from batoolset.ome_zarr import is_zarr_path, is_url, read_ome_zarr
+        if is_zarr_path(f):
+            try:
+                return read_ome_zarr(f)
+            except ValueError:
+                if is_url(f):
+                    raise
+            except ImportError:
+                raise ImportError("zarr is required to read OME-Zarr images. Install with: pip install zarr")
+
         # by default we now open with imageJ
         _IJ_EXCLUDED_EXTS = ('.tif', '.tiff', '.xls','.xlsx','.lst','.db','.txt','.png', '.jpg', '.jpeg', '.bmp', '.zarr') + VIDEO_EXTS  # formats handled natively
         _ij_reader_available = False
