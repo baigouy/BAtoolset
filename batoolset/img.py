@@ -3585,7 +3585,7 @@ def get_series_info(filename):
     # Fast path: formats known to be single-series (no JVM needed).
     # .lsm is loaded by tifffile which does not expose Bio-Formats series.
     _single_series_exts = ('.png', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff',
-                           '.lsm', '.xls', '.xlsx', '.lst', '.db', '.txt', '.svg')
+                           '.lsm', '.xls', '.xlsx', '.lst', '.db', '.txt', '.svg', '.pdf')
     if lower.endswith(_single_series_exts):
         return 1, None
 
@@ -3895,7 +3895,7 @@ def is_forbidden_image_file(path):
 # Companion sidecars in FORBIDDEN_IMAGE_EXTS are still excluded by is_image_file().
 # ---------------------------------------------------------------------------
 IMAGE_FILE_EXTS = (
-    '.tif', '.tiff', '.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tga', '.svg',
+    '.tif', '.tiff', '.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tga', '.svg', '.pdf',
     '.lsm', '.lif', '.czi', '.nd2', '.ims', '.oib', '.oif', '.zvi', '.dv',
     # more Bio-Formats microscopy formats (read through the Fiji reader)
     '.vsi', '.stk', '.ics', '.ids', '.oir', '.ndpi', '.svs', '.scn', '.mrc', '.r3d',
