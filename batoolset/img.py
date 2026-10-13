@@ -3587,10 +3587,20 @@ def get_series_info(filename):
     if lower.startswith(('http://', 'https://')):
         return 1, None
 
+    # a PDF (a vector panel): its pages are the "series" (PyMuPDF, if installed)
+    if lower.endswith('.pdf'):
+        try:
+            import fitz
+            with fitz.open(filename) as doc:
+                n = doc.page_count
+        except Exception:
+            return 1, None
+        return (n, [f'Page {i + 1}' for i in range(n)]) if n > 1 else (1, None)
+
     # Fast path: formats known to be single-series (no JVM needed).
     # .lsm is loaded by tifffile which does not expose Bio-Formats series.
     _single_series_exts = ('.png', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff',
-                           '.lsm', '.xls', '.xlsx', '.lst', '.db', '.txt', '.svg', '.pdf')
+                           '.lsm', '.xls', '.xlsx', '.lst', '.db', '.txt', '.svg')
     if lower.endswith(_single_series_exts):
         return 1, None
 
