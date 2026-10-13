@@ -3582,6 +3582,11 @@ def get_series_info(filename):
 
     lower = filename.lower()
 
+    # remote images (plain URLs, OME-Zarr, OMERO links) are one series each:
+    # never hand a URL to Bio-Formats
+    if lower.startswith(('http://', 'https://')):
+        return 1, None
+
     # Fast path: formats known to be single-series (no JVM needed).
     # .lsm is loaded by tifffile which does not expose Bio-Formats series.
     _single_series_exts = ('.png', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff',

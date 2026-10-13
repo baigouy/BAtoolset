@@ -67,6 +67,11 @@ class ImageReader:
         if is_video_file(f):
             return read_video(f)
 
+        # an image on an OMERO server, from its OMERO.web link
+        from batoolset.omero_web import is_omero_url, read_omero
+        if is_omero_url(f):
+            return read_omero(f)
+
         # OME-Zarr (local or http/https URL): one pyramid level, real pixel sizes.
         # A plain (non-OME) local zarr store falls through to the generic reader below.
         from batoolset.ome_zarr import is_zarr_path, is_url, read_ome_zarr
