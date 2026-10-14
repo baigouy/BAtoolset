@@ -3558,6 +3558,28 @@ def get_series_names_in_lif(lif_file_name):
 
 
 @lru_cache(maxsize=256)
+def pdf_page_count(path):
+    """Number of pages of a PDF, read with PyMuPDF (AGPL) or, if it is not
+    installed, pypdfium2 (Apache/BSD). ImportError if neither is installed."""
+    try:
+        import fitz
+    except ImportError:
+        fitz = None
+    if fitz is not None:
+        with fitz.open(path) as doc:
+            return doc.page_count
+    try:
+        import pypdfium2
+    except ImportError as e:
+        raise ImportError('PDF files need PyMuPDF (pip install pymupdf) '
+                          'or pypdfium2 (pip install pypdfium2)') from e
+    pdf = pypdfium2.PdfDocument(path)
+    try:
+        return len(pdf)
+    finally:
+        pdf.close()
+
+
 def get_series_info(filename):
     """
     Return (n_series, series_names) for files that support multiple series.
@@ -3587,12 +3609,10 @@ def get_series_info(filename):
     if lower.startswith(('http://', 'https://')):
         return 1, None
 
-    # a PDF (a vector panel): its pages are the "series" (PyMuPDF, if installed)
+    # a PDF (a panel): its pages are the "series"
     if lower.endswith('.pdf'):
         try:
-            import fitz
-            with fitz.open(filename) as doc:
-                n = doc.page_count
+            n = pdf_page_count(filename)
         except Exception:
             return 1, None
         return (n, [f'Page {i + 1}' for i in range(n)]) if n > 1 else (1, None)
