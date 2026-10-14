@@ -1045,7 +1045,13 @@ def print_date(dt):
 
 
 # this is a real file consolidation
-def consolidate_files2(save_folder, files_to_consolidate, consolidated_files):
+def consolidate_files2(save_folder, files_to_consolidate, consolidated_files, download_remote=False):
+    """Copy each file to its consolidated path. Remote sources (URLs) are
+    skipped, or with *download_remote* downloaded (batoolset.remote_download).
+    A download that fails keeps its link: its entry in *consolidated_files* is
+    set back to the URL (the list is changed in place). Returns the failed
+    downloads as (url, error message) pairs."""
+    failed = []
     folders_to_delete = []
     if os.path.exists(save_folder):
         for folder in os.listdir(save_folder):
@@ -1056,12 +1062,21 @@ def consolidate_files2(save_folder, files_to_consolidate, consolidated_files):
 
     os.makedirs(save_folder, exist_ok=True)
 
-    for file_path, new_path in zip(files_to_consolidate, consolidated_files):
+    for i, (file_path, new_path) in enumerate(zip(files_to_consolidate, consolidated_files)):
         print(file_path, '->', new_path)
 
-        if file_path == new_path or (isinstance(file_path, str)
-                                     and file_path.lower().startswith(('http://', 'https://'))):
-            continue    # remote source (kept as a URL) or nothing to copy
+        if file_path == new_path:
+            continue    # remote source kept as a URL, or nothing to copy
+        if isinstance(file_path, str) and file_path.lower().startswith(('http://', 'https://')):
+            if download_remote:
+                try:
+                    from batoolset.remote_download import download
+                    download(file_path, new_path)
+                except Exception as e:
+                    failed.append((file_path, f'{type(e).__name__}: {e}'))
+                    if isinstance(consolidated_files, list):
+                        consolidated_files[i] = file_path
+            continue
         try:
             folder_save = smart_name_parser(new_path, 'parent')
             os.makedirs(folder_save, exist_ok=True)
@@ -1091,6 +1106,7 @@ def consolidate_files2(save_folder, files_to_consolidate, consolidated_files):
         for folder in folders_to_delete:
             # print('deleting',os.path.join(save_folder, folder))
             shutil.rmtree(os.path.join(save_folder, folder))
+    return failed
 
 
 def consolidate_files(file_paths, save_folder, empty_folder=True, mock =True):
@@ -1187,7 +1203,7 @@ def consolidate_files_from_paired_lists(file_paths, dest_list,save_folder, empty
     return file_paths, new_paths
 
 
-def smartly_consolidate_files_to_reduce_dupes(full_list_of_filenames_to_consolidate, dest_folder):
+def smartly_consolidate_files_to_reduce_dupes(full_list_of_filenames_to_consolidate, dest_folder, download_remote=False):
     full_list_of_filenames_to_consolidate, consolidated_files = consolidate_files(full_list_of_filenames_to_consolidate, dest_folder)
     # now reduce the pairs so that we do not duplicate the same files and therfore minimize resources this si very importnat for crops and the same logic can be applied to minimize resources and loading
 
@@ -1225,11 +1241,20 @@ def smartly_consolidate_files_to_reduce_dupes(full_list_of_filenames_to_consolid
             final_version_of_consolidated_files.append(consolidated_files[idx])
         else:
             print(idx, elm.filename,'not found')
-    # remote sources (http/https, e.g. OME-Zarr on a server) cannot be bundled:
-    # they keep pointing at their URL
-    final_version_of_consolidated_files = [
-        src if isinstance(src, str) and src.lower().startswith(('http://', 'https://')) else dst
-        for src, dst in zip(full_list_of_filenames_to_consolidate, final_version_of_consolidated_files)]
+    # remote sources (http/https images, OME-Zarr on a server, OMERO links)
+    # keep pointing at their URL, unless *download_remote*: then they get a
+    # local copy in the bundle (batoolset.remote_download, done by
+    # consolidate_files2 with download_remote=True)
+    if download_remote:
+        from batoolset.remote_download import local_name
+        final_version_of_consolidated_files = [
+            os.path.join(os.path.dirname(dst), local_name(src))
+            if isinstance(src, str) and src.lower().startswith(('http://', 'https://')) else dst
+            for src, dst in zip(full_list_of_filenames_to_consolidate, final_version_of_consolidated_files)]
+    else:
+        final_version_of_consolidated_files = [
+            src if isinstance(src, str) and src.lower().startswith(('http://', 'https://')) else dst
+            for src, dst in zip(full_list_of_filenames_to_consolidate, final_version_of_consolidated_files)]
     return full_list_of_filenames_to_consolidate,final_version_of_consolidated_files
 
 
