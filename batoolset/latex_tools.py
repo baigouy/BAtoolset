@@ -100,6 +100,8 @@ INLINE_PREAMBLE = r"\usepackage{amsmath,amssymb,bm,siunitx}"
 CACHE_DIRS: list = []
 # keys of the formulas drawn since the last bind_figure(): saved with the figure
 USED: set = set()
+# the bound figure's folder (LaTeX code panels compile there: relative paths)
+FIGURE_DIR: list = []
 
 
 def labels_dir_for(figure_path):
@@ -111,25 +113,28 @@ def bind_figure(figure_path, reset=True):
     """Make *figure_path*'s folder the first cache (None: no figure). *reset*
     forgets which formulas were used (a new figure was opened)."""
     CACHE_DIRS[:] = [labels_dir_for(figure_path)] if figure_path else []
+    FIGURE_DIR[:] = [os.path.dirname(os.path.abspath(figure_path))] if figure_path else []
     if reset:
         USED.clear()
 
 
 def save_used(figure_path):
-    """Copy every formula drawn for the current figure next to *figure_path*
-    (so they travel with it). Returns the number copied."""
+    """Copy every formula (and compiled LaTeX code panel) drawn for the current
+    figure next to *figure_path* (so they travel with it). Returns the number
+    copied."""
     dest = labels_dir_for(figure_path)
     n = 0
     for key in sorted(USED):
-        if os.path.isfile(os.path.join(dest, key + ".svg")):
+        if os.path.isfile(os.path.join(dest, key + ".json")):
             continue
         for d in list(CACHE_DIRS) + [user_cache_dir()]:
-            svg = os.path.join(d, key + ".svg")
             meta = os.path.join(d, key + ".json")
-            if os.path.isfile(svg) and os.path.isfile(meta):
+            files = [key + ext for ext in (".svg", ".pdf") if os.path.isfile(os.path.join(d, key + ext))]
+            if os.path.isfile(meta) and files:
                 try:
                     os.makedirs(dest, exist_ok=True)
-                    shutil.copyfile(svg, os.path.join(dest, key + ".svg"))
+                    for name in files:
+                        shutil.copyfile(os.path.join(d, name), os.path.join(dest, name))
                     shutil.copyfile(meta, os.path.join(dest, key + ".json"))
                     n += 1
                 except OSError:
