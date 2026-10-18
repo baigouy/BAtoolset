@@ -564,6 +564,14 @@ class ImageReader:
                 #     image = imageio.v2.imread(f)  # ok
                 # except:
                     image = skimage.io.imread(f)
+                    if image.ndim == 3 and image.shape[-1] == 4 \
+                            and f.lower().endswith(('.jpg', '.jpeg')):
+                        # a CMYK JPEG (print files) came in as 4 ink channels and
+                        # showed as an inverted, 4-channel image: convert to RGB
+                        from PIL import Image as _PILImage
+                        with _PILImage.open(f) as _im:
+                            if _im.mode == 'CMYK':
+                                image = np.asarray(_im.convert('RGB'))
                     try:
                         if image.shape[0]==1: #the channels of /E/Sample_images/sample_images_FIJI/blobs.png are not read in the proper order which creates some errors !!!--> they are chw instead of hwc !!!
                             image = np.squeeze(image) # somehow there is a bug in the dimension order when reading the png /E/Sample_images/sample_images_FIJI/blobs.png --> need a fix
