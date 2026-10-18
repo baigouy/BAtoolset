@@ -4390,6 +4390,8 @@ class Img(np.ndarray):  # subclass ndarray
 
             if img is None:
                 meta, img = ImageReader.read(path, serie_to_open=serie_to_open)
+        except IndexError:
+            raise       # a series that does not exist: say so, don't try PIL
         except Exception:
             img = None
 

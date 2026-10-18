@@ -659,6 +659,10 @@ def _open_from_opts(opts, series_index, n):
     -------
     imp : ImagePlus
     """
+    if n and not 0 <= series_index < n:
+        # with no series switched on, Bio-Formats opens the first one: a wrong
+        # series number silently gave another image
+        raise IndexError(f'series {series_index} does not exist: the file has {n} series (0-{n - 1})')
     with ij_lock:  # re-entrant: callers may already hold it
         J = _java_imports()
         for i in range(n):

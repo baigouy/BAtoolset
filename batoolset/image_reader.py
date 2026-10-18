@@ -27,6 +27,47 @@ from batoolset.tools.logger import TA_logger  # logging
 logger = TA_logger()  # logging_level=TA_logger.DEBUG
 
 
+def _lif_series_metadata(serie):
+    """read_lif's getMetadata() for one series, also for 2D series (read_lif
+    expects X, Y and Z and fails on a single plane) and for series without
+    ScannerSettingRecord voxel sizes (taken from DimensionDescription)."""
+    try:
+        return serie.getMetadata()
+    except (ValueError, AttributeError, IndexError):
+        pass
+    sizes = {}
+    lengths = {}
+    units = set()
+    for d in serie.getDimensions():
+        dim_id = int(d.getAttribute('DimID'))
+        sizes[dim_id] = int(d.getAttribute('NumberOfElements'))
+        try:
+            lengths[dim_id] = float(d.getAttribute('Length'))
+        except ValueError:
+            pass
+        if d.getAttribute('Unit'):
+            units.add(d.getAttribute('Unit'))
+    factor = 1e6 if units == {'m'} else 1.0
+    unit = 'um' if units == {'m'} else ', '.join(sorted(units))
+
+    def voxel(dim_id):
+        if dim_id in lengths and sizes.get(dim_id):
+            return lengths[dim_id] / sizes[dim_id] * factor
+        return 1.0
+
+    return {
+        'voxel_size_x': voxel(1),
+        'voxel_size_y': voxel(2),
+        'voxel_size_z': voxel(3) if 3 in sizes else 1.0,
+        'voxel_size_unit': unit,
+        'voxel_number_x': sizes.get(1, 1),
+        'voxel_number_y': sizes.get(2, 1),
+        'voxel_number_z': sizes.get(3, 1),
+        'channel_number': len(serie.getChannels()),
+        'frame_number': serie.getNbFrames(),
+    }
+
+
 class ImageReader:
 
     def read(f, serie_to_open=None):
@@ -186,6 +227,8 @@ class ImageReader:
                     })
                     logger.debug('ij_reader successfully opened ' + str(f))
                     return metadata, image
+            except IndexError:
+                raise       # the series does not exist (no other reader can help)
             except Exception:
                 traceback.print_exc()
                 logger.warning('ij_reader failed for ' + str(f) + ' → falling back to default reader')
@@ -403,11 +446,12 @@ class ImageReader:
                 chosen = series[0]
             else:
                 if serie_to_open >= len(series) or serie_to_open < 0:
-                    logger.error('Out of range serie nb for current lif file, returning None')
-                    return None
+                    raise IndexError(f'series {serie_to_open} does not exist: the file has '
+                                     f'{len(series)} series (0-{len(series) - 1})')
                 chosen = series[serie_to_open]
 
-            meta_data = chosen.getMetadata()
+            meta_data = _lif_series_metadata(chosen)
+            is_2d = len(chosen.getBoxShape()) < 3
             voxel_x = meta_data['voxel_size_x']
             voxel_y = meta_data['voxel_size_y']
             voxel_z = meta_data['voxel_size_z']
@@ -427,7 +471,12 @@ class ImageReader:
             for T in range(t_frames):
                 zstack = None
                 for i in range(channels):
-                    cur_image = chosen.getFrame(T=T, channel=i)
+                    if is_2d:
+                        # read_lif's getFrame expects a Z axis; a 2D series is one plane
+                        # (y, x, 1): the moveaxis below then gives (1, y, x)
+                        cur_image = chosen.getFrame2D(T=T, channel=i)[..., np.newaxis]
+                    else:
+                        cur_image = chosen.getFrame(T=T, channel=i)
                     # dimName = {1: 'X',
                     #            2: 'Y',
                     #            3: 'Z',
