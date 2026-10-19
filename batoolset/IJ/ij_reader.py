@@ -234,9 +234,11 @@ def reset_fiji_cache():
     paths = [
         os.path.expanduser('~/.jgo'),
         os.path.expanduser('~/.m2/repository/sc/fiji'),
-        os.path.join(os.environ.get('LOCALAPPDATA', ''), 'cjdk', 'cache'),
         os.path.expanduser('~/.cjdk/cache'),
     ]
+    if os.environ.get('LOCALAPPDATA'):
+        # (unset on macOS / Linux: joining '' would name a folder under the current one)
+        paths.append(os.path.join(os.environ['LOCALAPPDATA'], 'cjdk', 'cache'))
 
     for path in paths:
         if path and os.path.isdir(path):

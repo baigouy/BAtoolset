@@ -1999,6 +1999,11 @@ def get_file_creation_time(filename, return_datetime_object=False):
                 pass
             return None
 
+    if not fname.exists() and isinstance(filename, str) and '#' in filename:
+        # 'image.zarr#level=2': a fragment choosing what to read, not part of the name
+        # ('#' is a valid file-name character, so only when the full name does not exist)
+        fname = pathlib.Path(filename.split('#', 1)[0])
+
     # Check that the file exists using the exists() method of the pathlib.Path object
     assert fname.exists(), f'No such file: {fname}'
 
