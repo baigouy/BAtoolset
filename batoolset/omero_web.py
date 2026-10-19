@@ -331,11 +331,39 @@ def image_data(url):
     return data
 
 
+def selection_problem(url, size) -> str | None:
+    """What is wrong with the '#z=..&t=..&c=..' fragment of *url* for an
+    image of *size* ({'z': n, 't': n, 'c': n}), or None."""
+    if "#" not in (url or ""):
+        return None
+    frag = url.split("#", 1)[1]
+    for key, values in parse_qs(frag, keep_blank_values=True).items():
+        if key not in ("z", "t", "c"):
+            return f"unknown plane selector {key!r} after '#': use z, t and c (e.g. #z=0-4&t=0&c=0,2)"
+        n = int(size[key])
+        for part in values[0].split(","):
+            part = part.strip()
+            m = re.fullmatch(r"(\d+)(?:-(\d+))?", part)
+            if not m:
+                return f"{key}={values[0]!r}: use numbers and ranges, e.g. {key}=0-4 or {key}=0,2"
+            a = int(m.group(1))
+            b = int(m.group(2)) if m.group(2) is not None else a
+            if b < a:
+                return f"{key}={part}: a range goes from low to high ({key}={b}-{a})"
+            if b >= n:
+                return f"{key}={part} out of range: the image has {n} {key.upper()} plane(s), 0-{n - 1}"
+    return None
+
+
 def describe(url) -> dict:
-    """What read_omero would read, from the metadata only (no pixels)."""
+    """What read_omero would read, from the metadata only (no pixels).
+    ValueError for a plane selection the image does not have."""
     base, image_id = parse_omero_url(url)
     d = image_data(url)
     size = d["size"]
+    problem = selection_problem(url, size)
+    if problem:
+        raise ValueError(problem)
     ps = d.get("pixel_size") or {}
     sel = _selection(url)
     planes = {k: sel.get(k, list(range(int(size[k])))) for k in ("z", "t", "c")}
