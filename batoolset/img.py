@@ -3615,6 +3615,11 @@ def get_series_info(filename):
     if lower.startswith(('http://', 'https://')):
         return 1, None
 
+    # no such file (a PyFigures '@template@' slot, a moved image) or a folder
+    # (local OME-Zarr): one series — Bio-Formats would only start its JVM to fail
+    if not os.path.isfile(filename):
+        return 1, None
+
     # a PDF (a panel): its pages are the "series"
     if lower.endswith('.pdf'):
         try:
