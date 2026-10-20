@@ -2456,7 +2456,8 @@ def save_as_tiff(img, output_name, print_file_name=False, ijmetadata='copy', mod
             if not img.has_c():
                 out = out[..., np.newaxis]
             if not img.has_d():
-                out = out[np.newaxis, ...]
+                # Z goes AFTER time: a 'thw' movie must stay frames, not become slices
+                out = np.expand_dims(out, axis=1 if img.has_t() else 0)
             if not img.has_t():
                 out = out[np.newaxis, ...]
         else:
@@ -5017,7 +5018,8 @@ class Img(np.ndarray):  # subclass ndarray
                     if not self.has_c():
                         out = out[..., np.newaxis]
                     if not self.has_d():
-                        out = out[np.newaxis, ...]
+                        # Z goes AFTER time: a 'thw' movie must stay frames, not become slices
+                        out = np.expand_dims(out, axis=1 if self.has_t() else 0)
                     if not self.has_t():
                         out = out[np.newaxis, ...]
                 else:
