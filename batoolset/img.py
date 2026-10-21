@@ -3633,6 +3633,12 @@ def get_series_info(filename):
     _single_series_exts = ('.png', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff',
                            '.lsm', '.xls', '.xlsx', '.lst', '.db', '.txt', '.svg')
     if lower.endswith(_single_series_exts):
+        if lower.endswith(('.tif', '.tiff')):
+            # a Fluoview/Micro-Manager TIFF can hold several positions (Fiji series)
+            from batoolset.image_reader import tiff_positions
+            n = tiff_positions(filename)
+            if n > 1:
+                return n, [f'Position {i + 1}' for i in range(n)]
         return 1, None
 
     # videos are single-series time-stacks — never route them through Bio-Formats/JVM
@@ -3946,12 +3952,17 @@ IMAGE_FILE_EXTS = (
     # more Bio-Formats microscopy formats (read through the Fiji reader)
     '.vsi', '.stk', '.ics', '.ids', '.oir', '.ndpi', '.svs', '.scn', '.mrc', '.r3d',
     '.lei', '.sld', '.btf',
+    # formats Fiji opens (ImageJ / Bio-Formats readers): DICOM, Gatan, Image-Pro, ...
+    '.dcm', '.dicom', '.dm3', '.dm4', '.ipl', '.seq', '.ipw', '.ipm', '.pic', '.fits', '.fit',
+    '.fts', '.nrrd', '.nhdr', '.mha', '.mhd', '.nii', '.nii.gz', '.hdr', '.img', '.pgm',
+    '.ppm', '.pbm', '.pnm', '.psd', '.pcx', '.pict', '.pct', '.jp2', '.j2k', '.webp', '.spe',
+    '.sdt', '.lim', '.liff', '.xdce', '.mnc', '.am', '.top', '.avs', '.dib',
 ) + VIDEO_EXTS
 
-
 def is_image_file(path):
-    """True for files PyFigures can load as an image (used to filter folder
-    contents on drag-and-drop). Excludes companion sidecars."""
+    """True for files PyFigures can load as an image: the image formats Fiji
+    opens (IMAGE_FILE_EXTS). Text files (.txt, .xml, .csv...) and companion
+    sidecars never are."""
     if not isinstance(path, str):
         return False
     lower = path.lower()

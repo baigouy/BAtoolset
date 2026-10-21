@@ -68,6 +68,47 @@ def _lif_series_metadata(serie):
     }
 
 
+def tiff_positions(path):
+    """Number of positions (tifffile axis R, a Bio-Formats series each) of a
+    TIFF with no ImageJ/LSM description, else 1."""
+    try:
+        with tifffile.TiffFile(path) as tif:
+            if tif.is_imagej or tif.is_lsm:
+                return 1
+            series = tif.series[0]
+            return series.shape[series.axes.index('R')] if 'R' in series.axes else 1
+    except Exception:
+        return 1
+
+
+def _tiff_by_axes(path, axes, serie_to_open=None):
+    """A TIFF read along tifffile's axes as t,d,h,w,c (singletons dropped);
+    a position axis R is a series: *serie_to_open* picks one (0 by default).
+    Returns (image, t_frames, depth, channels)."""
+    with tifffile.TiffFile(path) as tif:
+        image = tif.series[0].asarray()
+    if 'R' in axes:
+        r = axes.index('R')
+        n = image.shape[r]
+        index = serie_to_open or 0
+        if index >= n:
+            raise IndexError(f'series {index} does not exist ({n} series)')
+        image = np.take(image, index, axis=r)
+        axes = axes.replace('R', '')
+    if 'S' in axes and 'C' not in axes:
+        axes = axes.replace('S', 'C')
+    order = [axes.index(a) for a in 'TZYXCS' if a in axes]
+    image = np.transpose(image, order)
+    axes = ''.join(a for a in 'TZYXCS' if a in axes)
+    sizes = dict(zip(axes, image.shape))
+    image = np.squeeze(image)
+
+    def size(a):
+        return sizes[a] if sizes.get(a, 1) > 1 else None
+
+    return image, size('T'), size('Z'), size('C')
+
+
 class ImageReader:
 
     def read(f, serie_to_open=None):
@@ -289,6 +330,8 @@ class ImageReader:
                             bits = value
                         else:
                             bits = value[0]
+                    elif name in ('XResolution', 'YResolution') and not value[0]:
+                        pass        # a 0 resolution (Fluoview files): no pixel size there
                     elif name == 'XResolution':
                         val = value[1] / value[0]
                         if val != 1.0 or voxel_x is None:
@@ -388,6 +431,14 @@ class ImageReader:
                                 times = value
                             elif name == 'ChannelColors':
                                 luts = value['Colors']
+                # no ImageJ/LSM description said which axis is which (Fluoview,
+                # Micro-Manager... files): take tifffile's axes, as Fiji does
+                tiff_axes = None
+                if channels is None and depth is None and t_frames is None and not tif.is_imagej \
+                        and not tif.is_lsm:
+                    axes = tif.series[0].axes
+                    if set(axes) - set('YXS') and set(axes) <= set('TRZCYXS'):
+                        tiff_axes = axes
                 # print('in here',tif.series[0].asarray()) # --> so indeed it can read it here --> the rest is then a waste of time
                 # tif.series[0].asarray() # just one page
                 # image = np.squeeze(np.asarray(tif.series)) # not good because reads only one page here too --> at some point work on that
@@ -403,7 +454,10 @@ class ImageReader:
             # # has more properties than that
             # image = image_stack
             # image = np.squeeze(image)
-            image = np.squeeze(tifffile.imread(to_read))
+            if tiff_axes is not None:
+                image, t_frames, depth, channels = _tiff_by_axes(to_read, tiff_axes, serie_to_open)
+            else:
+                image = np.squeeze(tifffile.imread(to_read))
         elif f.lower().endswith('.lif'):
             # reader = read_lif.Reader(f)
             # series = reader.getSeries()
