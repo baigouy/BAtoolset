@@ -169,15 +169,17 @@ class ImageReader:
         # by default we now open with imageJ
         _IJ_EXCLUDED_EXTS = ('.tif', '.tiff', '.xls','.xlsx','.lst','.db','.txt','.png', '.jpg', '.jpeg', '.bmp', '.zarr') + VIDEO_EXTS  # formats handled natively
         _ij_reader_available = False
-        try:
-            from batoolset.IJ.ij_reader import list_and_open_series, get_luts, to_metadata
-            import imagej as _imagej
-            _ij_reader_available = True
-        except ImportError:
-            logger.info('IJ loader not found...')
-            pass
+        # only for the formats Fiji reads: importing pyimagej costs ~1 s
+        if isinstance(f, str) and not f.lower().endswith(_IJ_EXCLUDED_EXTS):
+            try:
+                from batoolset.IJ.ij_reader import list_and_open_series, get_luts, to_metadata
+                import imagej as _imagej
+                _ij_reader_available = True
+            except ImportError:
+                logger.info('IJ loader not found...')
+                pass
 
-        if _ij_reader_available and isinstance(f, str) and not f.lower().endswith(_IJ_EXCLUDED_EXTS):
+        if _ij_reader_available:
             _ij_locked = False
             try:
                 # print('opening image with IJ')

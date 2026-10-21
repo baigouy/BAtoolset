@@ -18,7 +18,6 @@ import tifffile  # open Zeiss .tif and .lsm files
 import glob
 from skimage.transform import rescale
 from skimage.util import img_as_ubyte
-import scipy.signal  # convolution of images
 import numpy as np
 import json
 from natsort import natsorted  # sort strings as humans would do
@@ -1963,6 +1962,7 @@ def convolve(img, kernel=np.array([[-1, -1, -1],
     Returns:
         numpy.ndarray: The convolved image as a numpy array.
     """
+    import scipy.signal     # here, not at module level: it costs ~1.5 s at every start
     # Use the convolve2d function from the scipy.signal module to convolve the image with the kernel
     convolved = scipy.signal.convolve2d(img, kernel, 'valid')
 
