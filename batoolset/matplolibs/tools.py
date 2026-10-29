@@ -103,7 +103,9 @@ def _compute_fig_rect(fig):
     try:
         renderer = fig.canvas.get_renderer()
         bbox = fig.get_tightbbox(renderer).padded(figure_pad_inches(fig))  # inches
-        w, h = bbox.width * fig_dpi, bbox.height * fig_dpi
+        # rounded: a 58 px figure (0.58 in at 100 dpi) came out 57.9999… and
+        # was truncated to 57 px further on
+        w, h = round(bbox.width * fig_dpi, 6), round(bbox.height * fig_dpi, 6)
         if w > 0 and h > 0:
             return QRectF(0, 0, w, h)
     except Exception:
@@ -111,7 +113,7 @@ def _compute_fig_rect(fig):
 
     # fallback: full figure size in pixels
     fig_size_pixels = fig.get_size_inches() * fig_dpi
-    return QRectF(0, 0, fig_size_pixels[0], fig_size_pixels[1])
+    return QRectF(0, 0, round(float(fig_size_pixels[0]), 6), round(float(fig_size_pixels[1]), 6))
 
 
 if __name__ == '__main__':
