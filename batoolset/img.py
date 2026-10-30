@@ -2859,6 +2859,14 @@ def one_hot_encoder(img, remap_dict=None):
 # NB I ASSUME IMAGE IS hw or hwc and nothing else which may be wrong!!! but then conversion should take place before the image is passed there
 # z_behaviour='middle'
 # TODO clean this code and remove useless parts
+def _owned_qimage(data, *args):
+    """A QImage that owns a copy of its pixels: QImage(bytes, ...) only points at
+    the temporary bytes object, and a repaint after it was freed read freed memory
+    (a rare access violation in drawPixmap during a drag)."""
+    from qtpy.QtGui import QImage  # imported here: the module stays usable without Qt
+    return QImage(data, *args).copy()
+
+
 def toQimage(img, autofix_always_display2D=True, normalize=True, z_behaviour=None, metadata=None, preserve_alpha=False, dimensions=None, luts=None):
     '''
        Converts a numpy ndarray to a QImage.
@@ -2959,7 +2967,7 @@ def toQimage(img, autofix_always_display2D=True, normalize=True, z_behaviour=Non
             # bytesPerLine = 3 * img.shape[-2]
             bytesPerLine = 3 * img.shape[-1]
 
-            qimage = QImage(img.data.tobytes(), img.shape[-2], img.shape[-3], bytesPerLine,
+            qimage = _owned_qimage(img.data.tobytes(), img.shape[-2], img.shape[-3], bytesPerLine,
                             QImage.Format_RGB888)  # --> bug fix but no display --> why ???
             return qimage
         else:
@@ -3013,7 +3021,7 @@ def toQimage(img, autofix_always_display2D=True, normalize=True, z_behaviour=Non
                 img = _normalize_8bits(img) # why I normalize after the blending ???  MAKES NO SENSE PROBABLY IF LUT I SHOULD NOT NORMALIZE AFTER!!!
 
             bytesPerLine = 3 * img.shape[-2]
-            qimage = QImage(img.data.tobytes(), img.shape[-2], img.shape[-3], bytesPerLine,
+            qimage = _owned_qimage(img.data.tobytes(), img.shape[-2], img.shape[-3], bytesPerLine,
                             QImage.Format_RGB888)  # --> bug fix but no display --> why ???
         elif nb_channels < 3:
             try:
@@ -3029,7 +3037,7 @@ def toQimage(img, autofix_always_display2D=True, normalize=True, z_behaviour=Non
             bytesPerLine = 3 * bgra.shape[-2]
             if normalize:
                 bgra = _normalize_8bits(bgra)
-            qimage = QImage(bgra.data.tobytes(), img.shape[-2], img.shape[-3], bytesPerLine, QImage.Format_RGB888)
+            qimage = _owned_qimage(bgra.data.tobytes(), img.shape[-2], img.shape[-3], bytesPerLine, QImage.Format_RGB888)
         else:
             # this does not make sense to handle ARGB in science but when I deactivate this all my images are black --> WHY
             # I really need to keep this for the alpha images of the mask but maybe still clean this code
@@ -3045,7 +3053,7 @@ def toQimage(img, autofix_always_display2D=True, normalize=True, z_behaviour=Non
                     bgra[..., 3].fill(255)
 
                 bytesPerLine = 4 * bgra.shape[-2]
-                qimage = QImage(bgra.data.tobytes(), img.shape[-2], img.shape[-3], bytesPerLine,
+                qimage = _owned_qimage(bgra.data.tobytes(), img.shape[-2], img.shape[-3], bytesPerLine,
                                 QImage.Format_ARGB32)
             else:
                 try:
@@ -3061,7 +3069,7 @@ def toQimage(img, autofix_always_display2D=True, normalize=True, z_behaviour=Non
                     bgra = _normalize_8bits(bgra) # again WHY NORMALIZE AFTER BLEND PROBABLY NEED NOT NORMALIZE IF BLEND/LUT
                 bytesPerLine = 3 * bgra.shape[-2]
 
-                qimage = QImage(bgra.data.tobytes(), bgra.shape[-2], bgra.shape[-3], bytesPerLine, QImage.Format_RGB888)
+                qimage = _owned_qimage(bgra.data.tobytes(), bgra.shape[-2], bgra.shape[-3], bytesPerLine, QImage.Format_RGB888)
 
     else:
         '''KEEP MEGA IMPORTANT
@@ -3072,7 +3080,7 @@ def toQimage(img, autofix_always_display2D=True, normalize=True, z_behaviour=Non
 
         logger.warning('this should never have been reached --> errors may occur')
         # seg fault was due to inversion in width and height of the image --> need be careful and fix always
-        qimage = QImage(img.data.tobytes(), img.shape[1], img.shape[0], bytesPerLine,
+        qimage = _owned_qimage(img.data.tobytes(), img.shape[1], img.shape[0], bytesPerLine,
                         QImage.Format_Indexed8)
 
     del img
@@ -3105,7 +3113,7 @@ def __numpy_to_qimage(array):
     else:
         raise ValueError("Unsupported number of channels")
 
-    qimage = QImage(array.data.tobytes(), width, height, bytes_per_line, format)
+    qimage = _owned_qimage(array.data.tobytes(), width, height, bytes_per_line, format)
     return qimage
 
 def _get_white_bounds(img):
