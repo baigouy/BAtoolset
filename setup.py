@@ -16,7 +16,8 @@ setuptools.setup(
     package_data={'': ['*.md','*.json']},
     license='BSD',
     include_package_data=True,
-    packages=setuptools.find_namespace_packages(),
+    # only batoolset: a stale build/lib (pre-split GUI modules) was packaged too
+    packages=setuptools.find_namespace_packages(include=['batoolset', 'batoolset.*']),
     classifiers=[
         'Programming Language :: Python :: 3',
         'License :: OSI Approved :: BSD License',
