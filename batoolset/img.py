@@ -1170,7 +1170,10 @@ def elastic_deform(image, displacement=None, axis=None, order=0, zoom=None, rota
     Returns:
         ndarray: The deformed image.
     '''
-    import elasticdeform
+    try:
+        import elasticdeform
+    except ImportError as e:
+        raise ImportError("elastic deformation needs the elasticdeform package: pip install elasticdeform") from e
     if axis is None:
         if len(image.shape) == 4:
             # assume 'dhwc'

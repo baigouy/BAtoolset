@@ -38,7 +38,8 @@ setuptools.setup(
         "numexpr",
         "urllib3",
         "pandas",
-        "elasticdeform",
+        # only img.elastic_deform needs it; no wheels for 3.13+ (pip install batoolset[deform] builds it)
+        "elasticdeform; python_version<'3.13'",
         "roifile",
         "prettytable",
         "pyperclip",
@@ -49,5 +50,8 @@ setuptools.setup(
         "psutil",
         "zarr",
     ],
-    python_requires='>=3.7, <3.12' # from 04/05/23 colab is using python 3.10.11
+    extras_require={
+        'deform': ["elasticdeform"],
+    },
+    python_requires='>=3.10',  # numpy>=2 needs 3.9+, CI tests 3.10+; no upper cap
 )
