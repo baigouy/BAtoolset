@@ -1,13 +1,27 @@
 import os.path
 import gc
+import time
 
 # from batoolset.img import Img
 # pb the store should also store metadata  -−> see how I can do that
 
 __DEBUG__ = False
 
+def _stamp(image_id):
+    """(size, mtime) of the file, None when it is not a readable local file."""
+    try:
+        st = os.stat(image_id)
+        return st.st_size, st.st_mtime_ns
+    except (OSError, TypeError, ValueError):
+        return None
+
+
 class ImageCentralStore:
     store = None
+    # file version of each entry: a file changed on disk (edited elsewhere,
+    # damaged, an online-only cloud file) was served from the store with its
+    # old pixels until restart (PyFigures, 2026-11-16)
+    _stamps = {}
 
     @classmethod
     def init(cls):
@@ -37,6 +51,7 @@ class ImageCentralStore:
                 if hasattr(data, 'metadata'):
                     metadata = data.metadata
                 cls.store[image_id] = [metadata,data]
+                cls._stamps[image_id] = (_stamp(image_id), time.time_ns())
             else:
                 try:
                     if __DEBUG__:
@@ -48,6 +63,20 @@ class ImageCentralStore:
                 print(f"Image {image_id} added to central store.")
 
     @classmethod
+    def _still_valid(cls, image_id):
+        """The stored entry is still the file on disk. File times move in coarse
+        steps (about 16 ms on Windows): a file rewritten with the same size
+        within one step looks unchanged, so an entry stored less than 2 s
+        after the file's last change is never trusted (git's 'racy' rule)."""
+        if image_id not in cls._stamps:
+            return True                      # stored before stamps existed (set_store)
+        (stamp, stored_at) = cls._stamps[image_id]
+        now = _stamp(image_id)
+        if stamp is None or now != stamp:
+            return stamp is None and now is None
+        return stored_at - now[1] >= 2_000_000_000
+
+    @classmethod
     def load(cls, image_id):
         if False:
             # shall I do gc
@@ -56,6 +85,10 @@ class ImageCentralStore:
             # Print the number of objects that were garbage collected
             print(f"{gc.collect():,} objects were garbage collected")
         if cls.store is not None:
+            if image_id in cls.store and not cls._still_valid(image_id):
+                # the file changed since it was stored: read it again (raises if now unreadable)
+                del cls.store[image_id]
+                cls._stamps.pop(image_id, None)
             if image_id in cls.store:
                 metadata, img = cls.store[image_id]
                 if __DEBUG__:
