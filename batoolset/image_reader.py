@@ -436,6 +436,9 @@ class ImageReader:
                 # no ImageJ/LSM description said which axis is which (Fluoview,
                 # Micro-Manager... files): take tifffile's axes, as Fiji does
                 tiff_axes = None
+                # an ImageJ stack saying only images=N (no slices=, no frames=): ImageJ
+                # shows it as Z slices; it was read as a time series (bat-cochlea-volume.tif)
+                imagej_plain_stack = bool(tif.is_imagej and depth is None and t_frames is None)
                 if channels is None and depth is None and t_frames is None and not tif.is_imagej \
                         and not tif.is_lsm:
                     axes = tif.series[0].axes
@@ -460,6 +463,11 @@ class ImageReader:
                 image, t_frames, depth, channels = _tiff_by_axes(to_read, tiff_axes, serie_to_open)
             else:
                 image = np.squeeze(tifffile.imread(to_read))
+                if locals().get('imagej_plain_stack') and image.ndim >= 3:
+                    colour = (channels is not None and channels > 1) or \
+                             (image.shape[-1] != width and image.shape[-1] <= 4)
+                    if image.ndim - 2 - (1 if colour else 0) == 1:
+                        depth = image.shape[0]
         elif f.lower().endswith('.lif'):
             # reader = read_lif.Reader(f)
             # series = reader.getSeries()
