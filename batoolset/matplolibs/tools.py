@@ -31,9 +31,14 @@ def figure_pad_inches(fig) -> float:
     pad = getattr(fig, '_pyfigures_pad_inches', None)
     if isinstance(pad, (int, float)):
         return float(pad)
-    import matplotlib as mpl
-    pad = mpl.rcParams.get('savefig.pad_inches', 0.1)
-    return float(pad) if isinstance(pad, (int, float)) else 0.1
+    # a hair, not matplotlib's 0.1 inch: that white frame made a plot sit further from
+    # its neighbours than the panel spacing (user 2026-11-19: "plots leave space on
+    # left and right, not respecting the spacing between panels"); the hair keeps the
+    # antialiased edge of the outermost text from being cut
+    return PANEL_PAD_INCHES
+
+
+PANEL_PAD_INCHES = 0.01
 
 
 def _fig_signature(fig):
@@ -83,12 +88,32 @@ def get_fig_rect(fig: plt.Figure):
     if sig is not None and cached is not None and cached[0] == sig:
         return QRectF(cached[1])            # a copy: callers may modify it
     rect = _compute_fig_rect(fig)
+    try:
+        # the key AFTER measuring: measuring draws the figure, and draw-time layouts
+        # (brackets) change its limits; keyed before, the next call missed the cache and
+        # measured another shape, and a plot was letterboxed in its panel (2026-11-19)
+        sig = _fig_signature(fig)
+    except Exception:
+        sig = None
     if sig is not None:
         try:
             fig._pyfigures_rect_cache = (sig, QRectF(rect))
         except Exception:
             pass
     return rect
+
+
+def settle_figure(fig, rounds=3):
+    """Draw *fig* without rendering until its axes limits stop changing (draw-time
+    layouts, e.g. significance brackets sized from their labels, adjust them)."""
+    for _ in range(rounds):
+        before = [(ax.get_xlim(), ax.get_ylim()) for ax in fig.axes]
+        try:
+            fig.draw_without_rendering()
+        except Exception:
+            return
+        if [(ax.get_xlim(), ax.get_ylim()) for ax in fig.axes] == before:
+            return
 
 
 def _compute_fig_rect(fig):
@@ -101,6 +126,11 @@ def _compute_fig_rect(fig):
     # every panel whose content is not 4:3 get stretched — an equal-aspect image
     # in a default figure came out horizontally distorted.
     try:
+        # drawn first: artists that settle at draw time (staplot's bracket layout sets
+        # the y range from the labels' real size) change the outline; measured without
+        # it, the panel was planned narrower-taller than the plot drawn into it, which
+        # was then letterboxed: white strips left and right (user, 2026-11-19, twice)
+        settle_figure(fig)
         renderer = fig.canvas.get_renderer()
         bbox = fig.get_tightbbox(renderer).padded(figure_pad_inches(fig))  # inches
         # rounded: a 58 px figure (0.58 in at 100 dpi) came out 57.9999… and

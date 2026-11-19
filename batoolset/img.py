@@ -3970,18 +3970,71 @@ IMAGE_FILE_EXTS = (
     '.sdt', '.lim', '.liff', '.xdce', '.mnc', '.am', '.top', '.avs', '.dib',
 ) + VIDEO_EXTS
 
+def sniff_image_format(path):
+    """The image format of a file read from its first bytes ('tiff', 'png', 'czi'...),
+    '' when it is not one PyFigures opens. For files with no extension (common on
+    macOS), whose name says nothing (user, 2026-11-19)."""
+    try:
+        with open(path, 'rb') as f:
+            head = f.read(1024)
+    except (OSError, ValueError, TypeError):
+        return ''
+    if head[:4] in (b'II*\x00', b'MM\x00*', b'II+\x00', b'MM\x00+'):
+        return 'tiff'
+    starts = ((b'\x89PNG\r\n\x1a\n', 'png'), (b'\xff\xd8\xff', 'jpeg'), (b'GIF87a', 'gif'),
+              (b'GIF89a', 'gif'), (b'ZISRAWFILE', 'czi'), (b'\xda\xce\xbe\x0a', 'nd2'),
+              (b'\x89HDF\r\n\x1a\n', 'ims'), (b'8BPS', 'psd'), (b'SIMPLE  =', 'fits'),
+              (b'\x00\x00\x00\x0cjP  ', 'jp2'), (b'%PDF', 'pdf'), (b'\x1aE\xdf\xa3', 'mkv'))
+    for magic, name in starts:
+        if head.startswith(magic):
+            return name
+    if head[:4] == b'RIFF' and head[8:12] in (b'WEBP', b'AVI '):
+        return 'webp' if head[8:12] == b'WEBP' else 'avi'
+    if head[4:8] == b'ftyp':
+        return 'mp4'
+    if len(head) >= 132 and head[128:132] == b'DICM':
+        return 'dicom'
+    if head[:2] == b'BM' and len(head) > 26 and head[6:10] == b'\x00\x00\x00\x00':
+        return 'bmp'
+    if head[:1] == b'\x70' and head[1:4] == b'\x00\x00\x00' and head[8:9] == b'\x2a':
+        return 'lif'
+    text = head.lstrip(b'\xef\xbb\xbf \t\r\n').lower()
+    if (text.startswith(b'<svg') or text.startswith(b'<?xml')) and b'<svg' in head.lower():
+        return 'svg'
+    return ''
+
+
+def has_no_extension(path):
+    """A file name with no extension ("blobs", not "blobs.png"; ".DS_Store" is hidden, not one)."""
+    name = os.path.basename(str(path))
+    return not name.startswith('.') and '.' not in name
+
+
 def is_image_file(path):
     """True for files PyFigures can load as an image: the image formats Fiji
     opens (IMAGE_FILE_EXTS). Text files (.txt, .xml, .csv...) and companion
-    sidecars never are."""
+    sidecars never are. A file with no extension is judged by its content."""
     if not isinstance(path, str):
         return False
     lower = path.lower()
-    return lower.endswith(IMAGE_FILE_EXTS) and not is_forbidden_image_file(lower)
+    if lower.endswith(IMAGE_FILE_EXTS):
+        return not is_forbidden_image_file(lower)
+    if has_no_extension(path) and os.path.isfile(path):
+        return bool(sniff_image_format(path))
+    return False
+
+
+def sorted_like_file_browser(paths):
+    """The file browser's order (Explorer / Finder: case-insensitive, numbers by value)."""
+    try:
+        from natsort import os_sorted
+        return list(os_sorted(paths))
+    except Exception:
+        return sorted(paths, key=str.lower)
 
 
 def list_image_files_in_folder(folder, recursive=True):
-    """Return a naturally-sorted list of loadable image files inside *folder*.
+    """Return the loadable image files inside *folder*, in the file browser's order.
 
     recursive=True walks sub-folders too (drop a folder -> get every image
     within). Returns [] if the folder holds no loadable images."""
@@ -3999,11 +4052,7 @@ def list_image_files_in_folder(folder, recursive=True):
             p = os.path.join(folder, f)
             if os.path.isfile(p) and is_image_file(p):
                 results.append(p)
-    try:
-        from natsort import natsorted
-        return natsorted(results)
-    except Exception:
-        return sorted(results)
+    return sorted_like_file_browser(results)
 
 
 def is_video_file(path):
