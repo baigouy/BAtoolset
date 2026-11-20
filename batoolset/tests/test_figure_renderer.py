@@ -31,3 +31,23 @@ def test_its_panel_rect_is_its_content_not_the_whole_figure():
     rect = get_fig_rect(fig)
     dpi = fig.get_dpi()
     assert rect.width() < 0.6 * 4 * dpi and rect.height() < 0.6 * 3 * dpi
+
+
+def test_a_listed_font_that_cannot_draw_is_skipped(monkeypatch):
+    """macOS lists its system Helvetica (.ttc) but Agg fails on it with "failed to load
+    glyph" (PyFigures CI 2026-11-20): the clone must be a font that draws."""
+    import batoolset.matplolibs.tools as T
+    monkeypatch.setattr(T, "_BEST_HELVETICA", [])
+    monkeypatch.setattr(T, "HELVETICA_CANDIDATES", ["Broken Sans", "DejaVu Sans"])
+    import matplotlib.font_manager as fm
+    real = fm.fontManager.ttflist
+    fake = type(real[0])(fname=real[0].fname, name="Broken Sans", style="normal", variant="normal",
+                         weight=400, stretch="normal", size="scalable")
+    monkeypatch.setattr(fm.fontManager, "ttflist", real + [fake])
+    monkeypatch.setattr(T, "font_draws", lambda family: family != "Broken Sans")
+    assert T.best_helvetica_clone() == "DejaVu Sans"
+
+
+def test_dejavu_draws():
+    from batoolset.matplolibs.tools import font_draws
+    assert font_draws("DejaVu Sans") and not font_draws("No Such Font Anywhere 123")

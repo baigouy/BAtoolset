@@ -14,14 +14,38 @@ HELVETICA_CANDIDATES = [
 ]
 
 
+_BEST_HELVETICA = []
+
+
+def font_draws(family):
+    """True when matplotlib's Agg renderer can draw text in *family*. macOS lists its
+    system Helvetica (a .ttc collection) yet Agg fails on it with "failed to load glyph"
+    (PyFigures CI on macOS, 2026-11-20: plots were not fitted to their panels)."""
+    import matplotlib.font_manager as fm
+    try:
+        path = fm.findfont(fm.FontProperties(family=family), fallback_to_default=False)
+        font = fm.get_font(path)
+        font.set_size(10, 72)
+        font.set_text('Ag 0.5 µm', 0.0)
+        return True
+    except Exception:
+        return False
+
+
 def best_helvetica_clone():
-    """Return the best available Helvetica-like font from matplotlib's font list."""
+    """Return the best available Helvetica-like font from matplotlib's font list that
+    matplotlib can really draw with (checked once, then remembered)."""
+    if _BEST_HELVETICA:
+        return _BEST_HELVETICA[0]
     import matplotlib.font_manager as fm
     available = {f.name.lower() for f in fm.fontManager.ttflist}
+    best = 'DejaVu Sans'
     for candidate in HELVETICA_CANDIDATES:
-        if candidate.lower() in available:
-            return candidate
-    return 'DejaVu Sans'
+        if candidate.lower() in available and font_draws(candidate):
+            best = candidate
+            break
+    _BEST_HELVETICA.append(best)
+    return best
 
 def figure_pad_inches(fig) -> float:
     """White margin kept around a figure's content when it is drawn as a panel
