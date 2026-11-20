@@ -20,13 +20,21 @@ _BEST_HELVETICA = []
 def font_draws(family):
     """True when matplotlib's Agg renderer can draw text in *family*. macOS lists its
     system Helvetica (a .ttc collection) yet Agg fails on it with "failed to load glyph"
-    (PyFigures CI on macOS, 2026-11-20: plots were not fitted to their panels)."""
+    (PyFigures CI on macOS, 2026-11-20: plots were not fitted to their panels).
+    Measured the way the Agg renderer measures a tick label (its fallback fonts and
+    hinting included). A family that is not installed counts as drawable: matplotlib
+    draws it in its default font (a first version said False there, and on Linux, where
+    Arial is not installed, a chosen Arial was replaced by the Helvetica clone)."""
+    import warnings
     import matplotlib.font_manager as fm
+    from matplotlib.figure import Figure
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
     try:
-        path = fm.findfont(fm.FontProperties(family=family), fallback_to_default=False)
-        font = fm.get_font(path)
-        font.set_size(10, 72)
-        font.set_text('Ag 0.5 µm', 0.0)
+        renderer = FigureCanvasAgg(Figure()).get_renderer()
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            renderer.get_text_width_height_descent('Ag 0.5 µm −1', fm.FontProperties(family=family, size=10),
+                                                   ismath=False)
         return True
     except Exception:
         return False

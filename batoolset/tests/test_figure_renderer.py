@@ -50,4 +50,21 @@ def test_a_listed_font_that_cannot_draw_is_skipped(monkeypatch):
 
 def test_dejavu_draws():
     from batoolset.matplolibs.tools import font_draws
-    assert font_draws("DejaVu Sans") and not font_draws("No Such Font Anywhere 123")
+    assert font_draws("DejaVu Sans")
+
+
+def test_a_font_that_is_not_installed_is_not_replaced():
+    """Linux CI 2026-11-20: Arial is not installed there; matplotlib draws it in its default
+    font, so a chosen Arial must stay Arial (it was replaced by the Helvetica clone)."""
+    from batoolset.matplolibs.tools import font_draws
+    assert font_draws("No Such Font Anywhere 123")
+
+
+def test_a_font_whose_glyphs_fail_cannot_draw(monkeypatch):
+    from matplotlib.backends import backend_agg
+    from batoolset.matplolibs.tools import font_draws
+
+    def broken(self, s, prop, ismath):
+        raise RuntimeError("failed to load glyph")
+    monkeypatch.setattr(backend_agg.RendererAgg, "get_text_width_height_descent", broken)
+    assert not font_draws("DejaVu Sans")
