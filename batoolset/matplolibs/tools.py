@@ -103,6 +103,18 @@ def get_fig_rect(fig: plt.Figure):
     return rect
 
 
+def figure_renderer(fig):
+    """A renderer to measure *fig* with. A Figure() made without pyplot has the base
+    canvas, which has no get_renderer() on macOS (CI 2026-11-20: plots were not fitted
+    to their panel, 3 % of it left empty): it is given an Agg canvas, which is what
+    savefig draws with anyway."""
+    get = getattr(fig.canvas, 'get_renderer', None)
+    if get is not None:
+        return get()
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    return FigureCanvasAgg(fig).get_renderer()
+
+
 def settle_figure(fig, rounds=3):
     """Draw *fig* without rendering until its axes limits stop changing (draw-time
     layouts, e.g. significance brackets sized from their labels, adjust them)."""
@@ -131,7 +143,7 @@ def _compute_fig_rect(fig):
         # it, the panel was planned narrower-taller than the plot drawn into it, which
         # was then letterboxed: white strips left and right (user, 2026-11-19, twice)
         settle_figure(fig)
-        renderer = fig.canvas.get_renderer()
+        renderer = figure_renderer(fig)
         bbox = fig.get_tightbbox(renderer).padded(figure_pad_inches(fig))  # inches
         # rounded: a 58 px figure (0.58 in at 100 dpi) came out 57.9999… and
         # was truncated to 57 px further on
